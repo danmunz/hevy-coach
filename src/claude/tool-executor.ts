@@ -45,19 +45,25 @@ function makeSearchFn(client: HevyClient) {
 function parseExerciseInputs(
   exercises: unknown[],
 ): RoutineExercisePayload[] {
-  return exercises.map((ex) => {
+  return exercises.map((ex, i) => {
     const e = ex as Record<string, unknown>;
-    const sets = (e.sets as unknown[]).map((s) => {
+    if (!e.name || typeof e.name !== "string") {
+      throw new Error(`Exercise ${i + 1} is missing a name.`);
+    }
+    if (!Array.isArray(e.sets) || e.sets.length === 0) {
+      throw new Error(`Exercise "${e.name}" has no sets.`);
+    }
+    const sets = e.sets.map((s) => {
       const set = s as Record<string, unknown>;
       return {
         type: (set.type as "normal" | "warmup") ?? "normal",
-        weightLbs: (set.weight_lbs as number) ?? 0,
-        reps: (set.reps as number) ?? 0,
+        weightLbs: typeof set.weight_lbs === "number" ? set.weight_lbs : 0,
+        reps: typeof set.reps === "number" ? set.reps : 0,
       };
     });
     return {
-      name: e.name as string,
-      supersetId: e.superset_id as number | undefined,
+      name: e.name,
+      supersetId: typeof e.superset_id === "number" ? e.superset_id : undefined,
       sets,
     };
   });

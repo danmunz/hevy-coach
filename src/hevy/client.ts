@@ -168,6 +168,9 @@ export class HevyClient {
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey ?? process.env.HEVY_API_KEY ?? "";
+    if (!this.apiKey) {
+      console.warn("[hevy] No API key configured. Set HEVY_API_KEY in .env.");
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -188,10 +191,13 @@ export class HevyClient {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15_000);
       try {
         const response = await fetch(url, {
           ...options,
           headers,
+          signal: controller.signal,
         });
 
         // Handle rate limiting (429)
@@ -238,7 +244,7 @@ export class HevyClient {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
 
-        // Network errors are retryable
+        // Network errors and timeouts are retryable
         if (
           attempt < RETRY_CONFIG.maxRetries &&
           !(lastError.message.includes("Hevy API"))
@@ -248,6 +254,8 @@ export class HevyClient {
         }
 
         throw lastError;
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
 
@@ -529,8 +537,8 @@ export class HevyClient {
       let page = 1;
       const pageSize = 10;
 
-      // Search through up to 3 pages to find matches
-      while (page <= 3) {
+      // Paginate through all available pages to find matches
+      while (true) {
         const payload = await this.fetchJson<Record<string, unknown>>(
           `/exercise_templates?page=${page}&pageSize=${pageSize}`,
         );

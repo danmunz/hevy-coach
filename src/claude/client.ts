@@ -13,40 +13,43 @@ import { addMessage } from '../state/chatlog.js';
 const MAX_TOOL_ITERATIONS = 10;
 
 // ---------------------------------------------------------------------------
+// Module-level singletons (created once, reused across chat() calls)
+// ---------------------------------------------------------------------------
+
+const anthropic = new Anthropic();
+const hevyClient = new HevyClient();
+const toolExecutor = new ToolExecutor(hevyClient);
+
+// ---------------------------------------------------------------------------
 // Chat
 // ---------------------------------------------------------------------------
 
 /**
  * Send a user message through the full Claude request lifecycle:
  *
- * 1. Store the user message in SQLite
- * 2. Assemble system prompt + chat history
- * 3. Call Claude with tools
- * 4. Execute the tool loop until Claude produces a final text response
- * 5. Store and return the assistant's response
+ * 1. Assemble system prompt + chat history
+ * 2. Call Claude with tools
+ * 3. Execute the tool loop until Claude produces a final text response
+ * 4. Store BOTH user and assistant messages after success
+ * 5. Return the assistant's response
  */
 export async function chat(userMessage: string): Promise<string> {
-  // 1. Store the user message
-  addMessage('user', userMessage);
-
-  // 2. Assemble context
+  // 1. Assemble context (before storing the user message — CRIT-001 fix)
   const systemPrompt = assembleSystemPrompt();
   const chatHistory = loadChatHistory();
 
-  // 3. Create clients
-  const anthropic = new Anthropic();
-  const hevyClient = new HevyClient();
-  const toolExecutor = new ToolExecutor(hevyClient);
-
   const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
 
-  // Build the messages array that grows with each tool-loop iteration.
-  // Start from the chat history (which already includes the user message
-  // we just stored).
-  const messages: Anthropic.MessageParam[] = chatHistory.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
+  // Build the messages array: prior history + current user message (not yet persisted).
+  // Both messages are stored AFTER Claude responds successfully to avoid
+  // consecutive same-role messages in the DB if the request fails mid-flight.
+  const messages: Anthropic.MessageParam[] = [
+    ...chatHistory.map((m) => ({
+      role: m.role,
+      content: m.content,
+    })),
+    { role: 'user' as const, content: userMessage },
+  ];
 
   // 4. Tool execution loop
   let iterations = 0;
@@ -67,17 +70,17 @@ export async function chat(userMessage: string): Promise<string> {
       (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
     );
 
-    if (toolUseBlocks.length === 0 || response.stop_reason === 'end_turn') {
-      // No tool calls — extract text and finish
+    if (response.stop_reason !== 'tool_use') {
+      // No more tool calls — extract text and finish
       const finalText = response.content
         .filter((block): block is Anthropic.TextBlock => block.type === 'text')
         .map((block) => block.text)
         .join('');
 
-      // 6. Store the assistant response
+      // Store BOTH messages after success (CRIT-001 fix)
+      addMessage('user', userMessage);
       addMessage('assistant', finalText);
 
-      // 7. Return the final text
       return finalText;
     }
 
