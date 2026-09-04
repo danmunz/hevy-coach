@@ -1,5 +1,7 @@
 # hevy-coach
 
+![hevy-coach](assets/coach-hevy.png)
+
 A Telegram bot that acts as your personal strength coach. It reads your training history from [Hevy](https://hevy.com), generates daily workouts using Claude, and pushes approved routines back into the Hevy app — so you wake up, text "morning," and get a personalized workout ready to start.
 
 ## Why this exists
@@ -185,6 +187,7 @@ hevy-coach/
 │   └── hevy-coach.db        # SQLite database
 ├── logs/                    # pm2 log output — gitignored
 │
+├── .claude/skills/          # Claude Code setup skills (/setup-coach, etc.)
 ├── docs/                    # Design docs and code reviews
 ├── ecosystem.config.cjs     # pm2 process config
 ├── .env                     # Your API keys — gitignored
@@ -196,6 +199,13 @@ hevy-coach/
 ## Customizing the bot for yourself
 
 The bot is designed so that everything personal lives in a few clearly separated files. You should never need to touch `src/` to make it your own coach.
+
+**Guided setup**: If you're using [Claude Code](https://claude.com/claude-code), three setup skills walk you through generating these files interactively:
+- `/setup-coach` — builds your coach persona through a conversation
+- `/setup-equipment` — inventories your gym (supports photo analysis)
+- `/setup-program` — configures your training program and starting weights
+
+You can also edit the files directly — they're just markdown.
 
 ### 1. Coach persona (`config/coach.md`)
 
