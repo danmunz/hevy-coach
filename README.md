@@ -1,5 +1,7 @@
 # hevy-coach
 
+![hevy-coach](assets/coach-hevy.png)
+
 A Telegram bot that acts as your personal strength coach. It reads your training history from [Hevy](https://hevy.com), generates daily workouts using Claude, and pushes approved routines back into the Hevy app — so you wake up, text "morning," and get a personalized workout ready to start.
 
 ## Why this exists
