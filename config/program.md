@@ -84,7 +84,7 @@ Guidelines, not rigid rules:
 After each 3-week cycle: +5 lbs to upper TMs (Bench, OHP), 
 +10 lbs to lower TMs (Squat, Deadlift).
 
-See coach.md for end-of-cycle TM update protocol — never 
+See rules.md for end-of-cycle TM update protocol — never 
 update without user confirmation.
 
 ## Determining Where I Am in the Program

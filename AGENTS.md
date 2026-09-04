@@ -151,7 +151,8 @@ The following files are the intended customization surface for end users. Change
 
 | File | Format | Hot-reload? | What it controls |
 |---|---|---|---|
-| `config/coach.md` | Markdown | Yes (next message) | Coach persona, voice, behavior, adjustment logic |
+| `config/coach.md` | Markdown | Yes (next message) | Coach persona, voice, style, adjustment logic (swappable) |
+| `config/rules.md` | Markdown | Yes (next message) | Behavioral guardrails: safety rules, tool usage protocols (stable across personas) |
 | `config/equipment.md` | Markdown | Yes (next message) | Available gym equipment and constraints |
 | `config/program.md` | Markdown | Yes (next message) | Training program structure, progression, percentages |
 | `config/defaults.json` | JSON | No (setup only) | Initial training maxes and goals |

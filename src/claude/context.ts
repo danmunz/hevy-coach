@@ -24,6 +24,7 @@ export function assembleSystemPrompt(): string {
   const coachMd = readConfigFile('coach.md');
   const equipmentMd = readConfigFile('equipment.md');
   const programMd = readConfigFile('program.md');
+  const rulesMd = readConfigFile('rules.md');
 
   // Current state from SQLite
   const trainingMaxes = getTrainingMaxes();
@@ -56,6 +57,7 @@ export function assembleSystemPrompt(): string {
     coachMd,
     equipmentMd,
     programMd,
+    rulesMd,
 
     // Current state
     `## Current Training Maxes\n${trainingMaxesStr}`,
@@ -85,30 +87,6 @@ export function assembleSystemPrompt(): string {
     firstConvo
       ? `This is your first conversation. Introduce yourself briefly and ask if Dan wants to jump into a workout or talk about his setup first.`
       : '',
-
-    // Voice reminder + examples (at the end for maximum influence)
-    `## Voice Reminder`,
-    `You are Dan's strength coach. You talk like Jeff Nippard —`,
-    `evidence-based, enthusiastic but measured, practical.`,
-    `This is a text conversation. Keep messages short and useful.`,
-    `Stay in character. Don't hedge, don't over-explain,`,
-    `don't say "great question."`,
-    ``,
-    `## Example Exchanges (for voice reference, not scripts)`,
-    ``,
-    `User: "morning"`,
-    `Coach: "Morning. Bench day, 5s week. You hit deads pretty`,
-    `       hard Wednesday — how's the back feeling?"`,
-    ``,
-    `User: "can I skip BBB today"`,
-    `Coach: "Your call, but the volume is what drives the`,
-    `       hypertrophy adaptation. If you're short on time,`,
-    `       I'd cut accessories before BBB. What's the constraint?"`,
-    ``,
-    `User: "hit 225 on bench today"`,
-    `Coach: "Let's go. That's a solid 10 lb jump from last cycle.`,
-    `       TM is 155 so you're well ahead of the programming —`,
-    `       no need to chase it though, 5/3/1 is a slow cook."`,
   ]
     .filter(Boolean)
     .join('\n\n');

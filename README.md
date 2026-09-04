@@ -150,7 +150,8 @@ The pm2 config lives in `ecosystem.config.cjs`. The `cwd` path in that file is h
 ```
 hevy-coach/
 ├── config/                  # ← EDIT THESE to customize the bot
-│   ├── coach.md             #   Coach persona, voice, behavior rules
+│   ├── coach.md             #   Coach persona, voice, style (swappable)
+│   ├── rules.md             #   Behavioral guardrails (stable across personas)
 │   ├── equipment.md         #   Your gym inventory and constraints
 │   ├── program.md           #   Training program structure
 │   └── defaults.json        #   Initial training maxes and goals
@@ -198,24 +199,41 @@ The bot is designed so that everything personal lives in a few clearly separated
 
 ### 1. Coach persona (`config/coach.md`)
 
-This is the system prompt that defines who the coach *is*. The default is an evidence-based Jeff Nippard-style coach. You can change:
+This is the system prompt that defines who the coach *is* — their personality, voice, and coaching style. The default is an evidence-based Jeff Nippard-style coach. You can change:
 
 - **Voice and personality** — make it a drill sergeant, a yoga instructor, a bodybuilding bro, whatever you want
-- **Morning check-in behavior** — how the coach opens a conversation, what it asks before programming
+- **Morning check-in style** — how the coach opens a conversation, what kind of openers it rotates between
+- **Programming philosophy** — what the coach prioritizes (hypertrophy, strength, both)
 - **Adjustment logic** — what happens when you're tired, short on time, or hurting
 - **Routine naming style** — the fun titles it gives workouts in Hevy
-- **Notes management** — when and what the coach remembers across sessions
-- **End-of-cycle protocol** — how training max increases are proposed and confirmed
+- **Example exchanges** — few-shot examples that set the tone for Claude's responses
 
-The coach persona is loaded fresh on every message, so changes take effect immediately (no restart needed if running via pm2 — restart is needed for the non-pm2 `npm start`).
+The persona file is loaded fresh on every message, so changes take effect immediately (no restart needed).
 
-### 2. Equipment list (`config/equipment.md`)
+Behavioral rules (when to save notes, how to handle TM updates, safety guardrails) live separately in `rules.md` — so you can swap personas without losing guardrails.
+
+### 2. Coaching rules (`config/rules.md`)
+
+Behavioral guardrails that apply regardless of which persona you're using. These control *what the coach must and must not do*, not how it sounds doing it:
+
+- **Check-in before programming** — never dump a workout without asking how the user feels
+- **Overwrite protection** — check for unfinished routines before replacing them
+- **Notes management** — save notes autonomously, clear when resolved
+- **TM update protocol** — never update training maxes without explicit confirmation
+- **API failure handling** — graceful degradation when Hevy is down
+- **Hard constraints** — never prescribe unavailable equipment, never ignore pain
+
+Most users won't need to edit this file. It's separated from the persona so that swapping `coach.md` doesn't accidentally remove a safety rule.
+
+Loaded fresh on every message, same as the persona.
+
+### 3. Equipment list (`config/equipment.md`)
 
 Your gym. The coach uses this to pick exercises you can actually do. List everything you have — barbells, dumbbells, machines, cables, bands, whatever. Note constraints like "no spotter" or "low ceiling."
 
 All weights should be written in lbs. The bot converts to kg at the API boundary using high-precision conversion (0.001 kg) so Hevy displays clean round-number lbs.
 
-### 3. Training program (`config/program.md`)
+### 4. Training program (`config/program.md`)
 
 The structure of your program. The default is a 5/3/1 Upper/Lower split, but you can replace this with any program:
 
@@ -227,7 +245,7 @@ The structure of your program. The default is a 5/3/1 Upper/Lower split, but you
 
 If you change the program structure significantly (e.g., from 5/3/1 to a PPL split), you'll also want to update the exercise pins (see below).
 
-### 4. Starting values (`config/defaults.json`)
+### 5. Starting values (`config/defaults.json`)
 
 Initial training maxes and goals, seeded into SQLite on first `npm run setup`. After setup, the bot manages these values itself (Claude updates them via tools when you confirm changes), so editing this file only matters before the first run or if you delete the database.
 
@@ -238,7 +256,7 @@ Initial training maxes and goals, seeded into SQLite on first `npm run setup`. A
 }
 ```
 
-### 5. Exercise pins (`src/hevy/exercise-pins.ts`)
+### 6. Exercise pins (`src/hevy/exercise-pins.ts`)
 
 This one *is* in `src/`, but it's a pure data file — a map of exercise display names to Hevy search queries. The setup script resolves each pin to a Hevy template ID so Claude can push routines without searching the API at runtime.
 
@@ -253,7 +271,7 @@ The `query` is what to search for in Hevy's exercise library. The optional `prim
 
 If Claude asks for an exercise that isn't pinned, it falls back to fuzzy search at runtime and logs a warning suggesting you add a pin. The bot won't break — it just costs an extra API-call cycle.
 
-### 6. Environment variables (`.env`)
+### 7. Environment variables (`.env`)
 
 `CLAUDE_MODEL` lets you swap models. `claude-sonnet-5-20250514` is the default — fast and cheap (~$0.01-0.03 per conversation). You could use `claude-opus-4-20250514` for more nuanced coaching at higher cost.
 
