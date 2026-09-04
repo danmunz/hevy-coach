@@ -13,6 +13,31 @@ import { addMessage } from '../state/chatlog.js';
 const MAX_TOOL_ITERATIONS = 10;
 
 // ---------------------------------------------------------------------------
+// History sanitizer
+// ---------------------------------------------------------------------------
+
+/**
+ * Merge consecutive same-role messages before sending to Claude.
+ * Belt-and-suspenders defense against DB corruption or edge cases that
+ * could produce an invalid message sequence.
+ */
+function sanitizeHistory(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
+  const result: Anthropic.MessageParam[] = [];
+  for (const msg of messages) {
+    if (result.length > 0 && result[result.length - 1].role === msg.role) {
+      // Merge consecutive same-role messages
+      const prev = result[result.length - 1];
+      if (typeof prev.content === 'string' && typeof msg.content === 'string') {
+        result[result.length - 1] = { role: msg.role, content: prev.content + '\n' + msg.content };
+      }
+    } else {
+      result.push({ ...msg });
+    }
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Module-level singletons (created once, reused across chat() calls)
 // ---------------------------------------------------------------------------
 
@@ -43,13 +68,13 @@ export async function chat(userMessage: string): Promise<string> {
   // Build the messages array: prior history + current user message (not yet persisted).
   // Both messages are stored AFTER Claude responds successfully to avoid
   // consecutive same-role messages in the DB if the request fails mid-flight.
-  const messages: Anthropic.MessageParam[] = [
+  const messages: Anthropic.MessageParam[] = sanitizeHistory([
     ...chatHistory.map((m) => ({
       role: m.role,
       content: m.content,
     })),
     { role: 'user' as const, content: userMessage },
-  ];
+  ]);
 
   // 4. Tool execution loop
   let iterations = 0;
@@ -57,6 +82,7 @@ export async function chat(userMessage: string): Promise<string> {
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations++;
 
+    console.log(`[claude] Calling model=${model} messages=${messages.length} iteration=${iterations}`);
     const response = await anthropic.messages.create({
       model,
       max_tokens: 1024,

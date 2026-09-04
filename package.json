@@ -6,7 +6,12 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "setup": "tsx scripts/setup.ts",
-    "chat": "tsx scripts/chat.ts"
+    "chat": "tsx scripts/chat.ts",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop hevy-coach",
+    "pm2:restart": "pm2 restart hevy-coach",
+    "pm2:logs": "pm2 logs hevy-coach",
+    "pm2:status": "pm2 status"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

@@ -1,15 +1,14 @@
 import Database from 'better-sqlite3';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.resolve(__dirname, '../../data/hevy-coach.db');
+const DB_PATH = path.resolve(process.cwd(), 'data/hevy-coach.db');
 
 let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (db) return db;
 
+  console.log(`[db] Opening database at ${DB_PATH}`);
   db = new Database(DB_PATH);
   db.pragma('journal_mode = WAL');
 

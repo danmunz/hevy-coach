@@ -1,13 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { getConfig, getTrainingMaxes } from '../state/config.js';
 import { getActiveNotes } from '../state/notes.js';
 import { getRecentMessages, isFirstConversation } from '../state/chatlog.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_DIR = path.resolve(__dirname, '../../config');
+const CONFIG_DIR = path.resolve(process.cwd(), 'config');
 
 function readConfigFile(filename: string): string {
   return fs.readFileSync(path.join(CONFIG_DIR, filename), 'utf-8');
