@@ -146,6 +146,7 @@ export async function chat(userMessage: string): Promise<string> {
   // always terminate via the early return above.
   const fallbackText =
     '[Max tool iterations reached. Please try again or rephrase your request.]';
+  addMessage('user', userMessage);
   addMessage('assistant', fallbackText);
   return fallbackText;
 }
