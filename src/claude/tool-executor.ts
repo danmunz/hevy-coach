@@ -31,12 +31,7 @@ function loadExerciseMap(): Map<string, string> {
  * resolveExerciseName's searchFn parameter.
  */
 function makeSearchFn(client: HevyClient) {
-  return async (query: string) => {
-    const result = await client.searchExerciseTemplates(query);
-    // If the result is an error object, return empty array
-    if (!Array.isArray(result)) return [];
-    return result;
-  };
+  return (query: string) => client.searchExerciseTemplates(query);
 }
 
 /**

@@ -23,7 +23,7 @@ export const EXERCISE_PINS: Record<string, ExerciseLookup> = {
   // -- Cable exercises --
   "Face Pull":                      { query: "Face Pull (Cable)" },
   "Lat Pulldown":                   { query: "Lat Pulldown (Cable)", primaryMuscleGroup: "lats" },
-  "Tricep Pushdown":                { query: "Tricep Pushdown (Cable)", primaryMuscleGroup: "triceps" },
+  "Tricep Pushdown":                { query: "Triceps Pushdown" },
   "Triceps Rope Pushdown":          { query: "Rope Pushdown", primaryMuscleGroup: "triceps" },
   "Cable Crunch":                   { query: "Cable Crunch", primaryMuscleGroup: "abdominals" },
   "Seated Row":                     { query: "Seated Row", primaryMuscleGroup: "upper_back" },
@@ -35,13 +35,9 @@ export const EXERCISE_PINS: Record<string, ExerciseLookup> = {
 
   // -- Bodyweight / minimal equipment --
   "Dips":                           { query: "Dips" },
-  "Pull Up":                        { query: "Pull Up", primaryMuscleGroup: "lats" },
-  "Hanging Knee Raise":             { query: "Hanging Knee Raise", primaryMuscleGroup: "abdominals" },
-  "Lunge":                          { query: "Lunge", primaryMuscleGroup: "quadriceps" },
-
-  // -- Machine exercises --
-  "Seated Leg Curl":                { query: "Seated Leg Curl", primaryMuscleGroup: "hamstrings" },
-  "Incline Chest Press (Machine)":  { query: "Incline Chest Press", primaryMuscleGroup: "chest" },
+  "Pull Up":                        { query: "Pull Up" },
+  "Hanging Knee Raise":             { query: "Hanging Knee Raise" },
+  "Lunge":                          { query: "Lunge" },
 };
 
 // ---------------------------------------------------------------------------

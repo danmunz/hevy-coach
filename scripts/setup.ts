@@ -131,15 +131,7 @@ async function cacheExerciseTemplates(): Promise<{ resolved: number; total: numb
   const client = new HevyClient();
   const total = Object.keys(EXERCISE_PINS).length;
 
-  // resolveExerciseMap expects (query: string) => Promise<HevyTemplateMatch[]>
-  // but searchExerciseTemplates returns Promise<HevyTemplateMatch[] | HevyApiError>
-  // Wrap it to filter out error responses.
-  const searchFn = async (query: string) => {
-    const result = await client.searchExerciseTemplates(query);
-    if (!Array.isArray(result)) return [];
-    return result;
-  };
-
+  const searchFn = (query: string) => client.searchExerciseTemplates(query);
   const exerciseMap = await resolveExerciseMap(searchFn);
 
   // Persist to exercise_map table

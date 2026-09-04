@@ -165,6 +165,7 @@ function apiError(message: string, suggestion: string): HevyApiError {
 
 export class HevyClient {
   private readonly apiKey: string;
+  private templateCache: HevyTemplateMatch[] | null = null;
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey ?? process.env.HEVY_API_KEY ?? "";
@@ -526,79 +527,94 @@ export class HevyClient {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Exercise template search (cached)
+  // -------------------------------------------------------------------------
+
   /**
-   * Searches Hevy exercise templates by name query.
+   * Fetches ALL exercise templates from the Hevy API and caches them
+   * in memory. Uses pageSize=100 (the API max) so it completes in
+   * 3-4 requests instead of 30+.
+   *
+   * Call this once during setup; subsequent calls return the cache.
+   */
+  async fetchAllTemplates(): Promise<HevyTemplateMatch[]> {
+    if (this.templateCache) return this.templateCache;
+
+    const templates: HevyTemplateMatch[] = [];
+    let page = 1;
+    const pageSize = 100; // API max
+
+    while (true) {
+      const payload = await this.fetchJson<Record<string, unknown>>(
+        `/exercise_templates?page=${page}&pageSize=${pageSize}`,
+      );
+
+      const rawTemplates = Array.isArray(payload.exercise_templates)
+        ? payload.exercise_templates
+        : Array.isArray(
+              (payload as Record<string, unknown>).exerciseTemplates,
+            )
+          ? (payload as Record<string, unknown>).exerciseTemplates as unknown[]
+          : [];
+
+      if (rawTemplates.length === 0) break;
+
+      for (const raw of rawTemplates) {
+        if (!raw || typeof raw !== "object") continue;
+        const r = raw as Record<string, unknown>;
+        const templateTitle = typeof r.title === "string" ? r.title : "";
+        if (!templateTitle) continue;
+
+        templates.push({
+          id: typeof r.id === "string" ? r.id : String(r.id ?? ""),
+          title: templateTitle,
+          primaryMuscleGroup:
+            typeof r.primary_muscle_group === "string"
+              ? r.primary_muscle_group
+              : typeof r.primaryMuscleGroup === "string"
+                ? r.primaryMuscleGroup
+                : undefined,
+          isCustom:
+            typeof r.is_custom === "boolean"
+              ? r.is_custom
+              : typeof r.isCustom === "boolean"
+                ? r.isCustom
+                : undefined,
+        });
+      }
+
+      const pageCount =
+        typeof payload.page_count === "number"
+          ? payload.page_count
+          : typeof (payload as Record<string, unknown>).pageCount === "number"
+            ? (payload as Record<string, unknown>).pageCount as number
+            : page;
+
+      if (page >= pageCount) break;
+      page++;
+    }
+
+    console.log(`[hevy] Cached ${templates.length} exercise templates in ${page} API calls.`);
+    this.templateCache = templates;
+    return templates;
+  }
+
+  /**
+   * Searches exercise templates by name query against the in-memory cache.
+   *
+   * Fetches and caches all templates on first call. Subsequent calls are
+   * pure in-memory substring matching — zero API calls.
    */
   async searchExerciseTemplates(
     query: string,
-  ): Promise<HevyTemplateMatch[] | HevyApiError> {
-    try {
-      const results: HevyTemplateMatch[] = [];
-      let page = 1;
-      const pageSize = 10;
+  ): Promise<HevyTemplateMatch[]> {
+    const allTemplates = await this.fetchAllTemplates();
+    const normalizedQuery = query.trim().toLowerCase();
 
-      // Paginate through all available pages to find matches
-      while (true) {
-        const payload = await this.fetchJson<Record<string, unknown>>(
-          `/exercise_templates?page=${page}&pageSize=${pageSize}`,
-        );
-
-        const rawTemplates = Array.isArray(payload.exercise_templates)
-          ? payload.exercise_templates
-          : Array.isArray(
-                (payload as Record<string, unknown>).exerciseTemplates,
-              )
-            ? (payload as Record<string, unknown>).exerciseTemplates as unknown[]
-            : [];
-
-        if (rawTemplates.length === 0) break;
-
-        const normalizedQuery = query.trim().toLowerCase();
-
-        for (const raw of rawTemplates) {
-          if (!raw || typeof raw !== "object") continue;
-          const r = raw as Record<string, unknown>;
-          const templateTitle = typeof r.title === "string" ? r.title : "";
-
-          if (templateTitle.toLowerCase().includes(normalizedQuery)) {
-            results.push({
-              id: typeof r.id === "string" ? r.id : String(r.id ?? ""),
-              title: templateTitle,
-              primaryMuscleGroup:
-                typeof r.primary_muscle_group === "string"
-                  ? r.primary_muscle_group
-                  : typeof r.primaryMuscleGroup === "string"
-                    ? r.primaryMuscleGroup
-                    : undefined,
-              isCustom:
-                typeof r.is_custom === "boolean"
-                  ? r.is_custom
-                  : typeof r.isCustom === "boolean"
-                    ? r.isCustom
-                    : undefined,
-            });
-          }
-        }
-
-        const pageCount =
-          typeof payload.page_count === "number"
-            ? payload.page_count
-            : typeof (payload as Record<string, unknown>).pageCount === "number"
-              ? (payload as Record<string, unknown>).pageCount as number
-              : page;
-
-        if (page >= pageCount) break;
-        page++;
-      }
-
-      return results;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return apiError(
-        `Failed to search exercise templates: ${msg}`,
-        "Check that HEVY_API_KEY is set and valid.",
-      );
-    }
+    return allTemplates.filter((t) =>
+      t.title.toLowerCase().includes(normalizedQuery),
+    );
   }
 }
 

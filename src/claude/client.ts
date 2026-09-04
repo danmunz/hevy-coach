@@ -63,7 +63,7 @@ export async function chat(userMessage: string): Promise<string> {
   const systemPrompt = assembleSystemPrompt();
   const chatHistory = loadChatHistory();
 
-  const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
+  const model = process.env.CLAUDE_MODEL || 'claude-sonnet-5-20250514';
 
   // Build the messages array: prior history + current user message (not yet persisted).
   // Both messages are stored AFTER Claude responds successfully to avoid
