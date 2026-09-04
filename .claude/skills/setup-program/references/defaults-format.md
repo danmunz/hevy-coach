@@ -14,6 +14,12 @@ This is how `src/state/config.ts` reads it — it parses the string at runtime.
 The keys must be exactly `squat`, `bench`, `deadlift`, `ohp` — the
 `TrainingMaxes` interface in the codebase requires all four.
 
+**Seeding behavior**: `seedDefaults()` uses `INSERT OR IGNORE` — it only
+writes values that don't already exist in SQLite. Re-running `npm run setup`
+on an existing database will NOT update training maxes or goals. To update
+live values, the user must either tell the bot in chat (it has an
+`update_training_maxes` tool) or delete the database and re-run setup.
+
 ## Values
 
 - All TM values in lbs, rounded to nearest 5

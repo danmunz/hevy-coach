@@ -149,7 +149,21 @@ You can also share a file or document if you have one written up."
 
 10. **Next steps**
 
-    "Your program and training maxes are saved. Run `npm run setup` to seed
-    the database with these values (and resolve any new exercise pins). If
-    you haven't set up your coach persona or equipment yet, run `/setup-coach`
-    or `/setup-equipment`."
+    If this is a **first-time setup** (no database yet):
+    "Your program and training maxes are saved. Run `npm run setup` to create
+    the database and seed these values."
+
+    If the **database already exists** (the user is changing programs):
+    "Your program file is saved and takes effect on the next message (hot-reload).
+    However, `defaults.json` only applies on first-time `npm run setup` — it
+    won't overwrite existing training maxes in the database. To update your
+    live training maxes, either:
+    - Tell the bot your new maxes in chat (it has an `update_training_maxes` tool), or
+    - Delete `data/hevy-coach.db` and re-run `npm run setup` to start fresh."
+
+    If exercise pins were suggested:
+    "To apply pin changes, edit `src/hevy/exercise-pins.ts`, then run
+    `npm run setup` to resolve the new pins against the Hevy API."
+
+    "If you haven't set up your coach persona or equipment yet, run
+    `/setup-coach` or `/setup-equipment`."
