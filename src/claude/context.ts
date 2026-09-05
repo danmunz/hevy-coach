@@ -7,13 +7,11 @@ import { getRecentMessages, isFirstConversation } from '../state/chatlog.js';
 
 const CONFIG_DIR = path.resolve(process.cwd(), 'config');
 
+// Every config file is mandatory — rules.md in particular carries the safety
+// guardrails. A missing or unreadable file must fail closed rather than send
+// Claude a prompt without them, so read errors propagate to the caller.
 function readConfigFile(filename: string): string {
-  try {
-    return fs.readFileSync(path.join(CONFIG_DIR, filename), 'utf-8');
-  } catch {
-    console.warn(`[config] Missing config file: ${filename}`);
-    return '';
-  }
+  return fs.readFileSync(path.join(CONFIG_DIR, filename), 'utf-8');
 }
 
 function formatNoteDate(isoDate: string): string {
