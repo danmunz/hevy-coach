@@ -4,6 +4,7 @@ import path from 'node:path';
 import { getConfig, getTrainingMaxes } from '../state/config.js';
 import { getActiveNotes } from '../state/notes.js';
 import { getRecentMessages, isFirstConversation } from '../state/chatlog.js';
+import { TIMEZONE } from '../util/timezone.js';
 
 const CONFIG_DIR = path.resolve(process.cwd(), 'config');
 
@@ -35,21 +36,15 @@ export function assembleSystemPrompt(): string {
   const activeNotes = getActiveNotes();
 
   // Current local time
-  let localTime: string;
-  try {
-    localTime = new Date().toLocaleString('en-US', {
-      timeZone: process.env.TIMEZONE || 'America/New_York',
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  } catch {
-    console.warn(`[config] Invalid TIMEZONE "${process.env.TIMEZONE}", falling back to UTC`);
-    localTime = new Date().toUTCString();
-  }
+  const localTime = new Date().toLocaleString('en-US', {
+    timeZone: TIMEZONE,
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 
   // First conversation detection
   const firstConvo = isFirstConversation();
