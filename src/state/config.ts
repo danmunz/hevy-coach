@@ -29,18 +29,24 @@ export function getTrainingMaxes(): TrainingMaxes {
   if (!raw) {
     return { squat: 0, bench: 0, deadlift: 0, ohp: 0 };
   }
+  // Corruption must surface, not degrade to zeroes: setTrainingMaxes merges a
+  // partial update over whatever this returns, so zeroed defaults would let the
+  // next update_training_maxes call overwrite every untouched lift for good.
+  let parsed: Partial<TrainingMaxes>;
   try {
-    const parsed = JSON.parse(raw) as Partial<TrainingMaxes>;
-    return {
-      squat: parsed.squat ?? 0,
-      bench: parsed.bench ?? 0,
-      deadlift: parsed.deadlift ?? 0,
-      ohp: parsed.ohp ?? 0,
-    };
+    parsed = JSON.parse(raw) as Partial<TrainingMaxes>;
   } catch {
-    console.warn('[config] Corrupted training_maxes value, using defaults');
-    return { squat: 0, bench: 0, deadlift: 0, ohp: 0 };
+    throw new Error(
+      `Stored training_maxes is not valid JSON (${JSON.stringify(raw)}). ` +
+        'Repair the config row before training maxes can be read or updated.',
+    );
   }
+  return {
+    squat: parsed.squat ?? 0,
+    bench: parsed.bench ?? 0,
+    deadlift: parsed.deadlift ?? 0,
+    ohp: parsed.ohp ?? 0,
+  };
 }
 
 export function setTrainingMaxes(maxes: Partial<TrainingMaxes>): void {
