@@ -85,7 +85,7 @@ export async function chat(userMessage: string): Promise<string> {
     console.log(`[claude] Calling model=${model} messages=${messages.length} iteration=${iterations}`);
     const response = await anthropic.messages.create({
       model,
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: systemPrompt,
       messages,
       tools: TOOLS,
@@ -98,14 +98,22 @@ export async function chat(userMessage: string): Promise<string> {
 
     if (response.stop_reason !== 'tool_use') {
       // No more tool calls — extract text and finish
-      const finalText = response.content
-        .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-        .map((block) => block.text)
-        .join('');
+      const textBlocks = response.content.filter(
+        (block): block is Anthropic.TextBlock => block.type === 'text',
+      );
+      if (textBlocks.length === 0) {
+        console.warn(
+          `[claude] No text blocks in response. stop_reason=${response.stop_reason} ` +
+          `block_types=${response.content.map((b) => b.type).join(',')}`,
+        );
+      }
+      const finalText = textBlocks.map((block) => block.text).join('');
 
       // Store BOTH messages after success (CRIT-001 fix)
       addMessage('user', userMessage);
-      addMessage('assistant', finalText);
+      if (finalText) {
+        addMessage('assistant', finalText);
+      }
 
       return finalText;
     }
