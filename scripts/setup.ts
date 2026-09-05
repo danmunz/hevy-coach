@@ -79,7 +79,7 @@ async function verifyClaude(): Promise<boolean> {
   }
   try {
     const client = new Anthropic({ apiKey });
-    const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
+    const model = process.env.CLAUDE_MODEL || 'claude-sonnet-5';
     await client.messages.create({
       model,
       max_tokens: 10,

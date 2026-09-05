@@ -63,7 +63,7 @@ export async function chat(userMessage: string): Promise<string> {
   const systemPrompt = assembleSystemPrompt();
   const chatHistory = loadChatHistory();
 
-  const model = process.env.CLAUDE_MODEL || 'claude-sonnet-5-20250514';
+  const model = process.env.CLAUDE_MODEL || 'claude-sonnet-5';
 
   // Build the messages array: prior history + current user message (not yet persisted).
   // Both messages are stored AFTER Claude responds successfully to avoid
@@ -76,8 +76,12 @@ export async function chat(userMessage: string): Promise<string> {
     { role: 'user' as const, content: userMessage },
   ]);
 
-  // 4. Tool execution loop
+  // 4. Tool execution loop. Claude may put text alongside its tool calls
+  // (e.g. "Let me check your workouts…") and then return none at all once the
+  // results come back, so that text is kept only as a fallback for an empty
+  // final response — never appended to one that has its own text.
   let iterations = 0;
+  const preToolText: string[] = [];
 
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations++;
@@ -85,11 +89,17 @@ export async function chat(userMessage: string): Promise<string> {
     console.log(`[claude] Calling model=${model} messages=${messages.length} iteration=${iterations}`);
     const response = await anthropic.messages.create({
       model,
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: systemPrompt,
       messages,
       tools: TOOLS,
     });
+
+    // Extract text from this iteration
+    const textBlocks = response.content.filter(
+      (block): block is Anthropic.TextBlock => block.type === 'text',
+    );
+    const iterationText = textBlocks.map((block) => block.text).join('');
 
     // Check if Claude wants to use tools
     const toolUseBlocks = response.content.filter(
@@ -97,20 +107,34 @@ export async function chat(userMessage: string): Promise<string> {
     );
 
     if (response.stop_reason !== 'tool_use') {
-      // No more tool calls — extract text and finish
-      const finalText = response.content
-        .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-        .map((block) => block.text)
-        .join('');
+      // No more tool calls. Use this iteration's text; only when it is empty
+      // fall back to whatever Claude said before its tool calls.
+      const finalText = iterationText || preToolText.join('\n\n');
 
-      // Store BOTH messages after success (CRIT-001 fix)
-      addMessage('user', userMessage);
-      addMessage('assistant', finalText);
+      if (!finalText) {
+        console.warn(
+          `[claude] No text in any iteration. stop_reason=${response.stop_reason} ` +
+          `block_types=${response.content.map((b) => b.type).join(',')}`,
+        );
+      }
+
+      // Store BOTH messages after success (CRIT-001 fix).
+      // Skip both if the assistant response is empty to avoid orphaned
+      // user messages that corrupt subsequent history.
+      if (finalText) {
+        addMessage('user', userMessage);
+        addMessage('assistant', finalText);
+      }
 
       return finalText;
     }
 
-    // Claude wants to use tools — append its response to messages
+    // Claude wants to use tools — keep any preamble text as a fallback and
+    // append its response to messages
+    if (iterationText) {
+      preToolText.push(iterationText);
+    }
+
     messages.push({
       role: 'assistant',
       content: response.content,

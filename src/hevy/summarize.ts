@@ -1,11 +1,10 @@
 import type { HevyCompletedWorkout, HevyCompletedWorkoutExercise } from "./types.js";
 import { kilogramsToPounds } from "./utils.js";
+import { TIMEZONE } from "../util/timezone.js";
 
 // ---------------------------------------------------------------------------
 // Date formatting
 // ---------------------------------------------------------------------------
-
-const TIMEZONE = process.env.TIMEZONE ?? "America/New_York";
 
 /** Formats an ISO timestamp as a short weekday + date string (e.g. "Tue Sep 2"). */
 function formatDate(iso: string | undefined): string {

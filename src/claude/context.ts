@@ -4,9 +4,13 @@ import path from 'node:path';
 import { getConfig, getTrainingMaxes } from '../state/config.js';
 import { getActiveNotes } from '../state/notes.js';
 import { getRecentMessages, isFirstConversation } from '../state/chatlog.js';
+import { TIMEZONE } from '../util/timezone.js';
 
 const CONFIG_DIR = path.resolve(process.cwd(), 'config');
 
+// Every config file is mandatory — rules.md in particular carries the safety
+// guardrails. A missing or unreadable file must fail closed rather than send
+// Claude a prompt without them, so read errors propagate to the caller.
 function readConfigFile(filename: string): string {
   return fs.readFileSync(path.join(CONFIG_DIR, filename), 'utf-8');
 }
@@ -33,7 +37,7 @@ export function assembleSystemPrompt(): string {
 
   // Current local time
   const localTime = new Date().toLocaleString('en-US', {
-    timeZone: process.env.TIMEZONE || 'America/New_York',
+    timeZone: TIMEZONE,
     weekday: 'long',
     year: 'numeric',
     month: 'long',
