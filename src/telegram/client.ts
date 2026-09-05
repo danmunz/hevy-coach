@@ -140,6 +140,11 @@ function splitIntoChunks(text: string): string[] {
  * and a short delay between messages for natural pacing.
  */
 export async function sendSplitMessages(ctx: Context, text: string): Promise<void> {
+  if (!text || !text.trim()) {
+    console.warn('[telegram] Skipping empty message');
+    return;
+  }
+
   const chunks = text.length <= MAX_CHUNK ? [text] : splitIntoChunks(text);
 
   for (let i = 0; i < chunks.length; i++) {
