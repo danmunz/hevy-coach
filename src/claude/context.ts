@@ -4,7 +4,7 @@ import path from 'node:path';
 import { getConfig, getTrainingMaxes } from '../state/config.js';
 import { getActiveNotes } from '../state/notes.js';
 import { getRecentMessages, isFirstConversation } from '../state/chatlog.js';
-import { TIMEZONE } from '../util/timezone.js';
+import { TIMEZONE, formatStoredDate, formatStoredTime } from '../util/timezone.js';
 
 const CONFIG_DIR = path.resolve(process.cwd(), 'config');
 
@@ -15,13 +15,7 @@ function readConfigFile(filename: string): string {
   return fs.readFileSync(path.join(CONFIG_DIR, filename), 'utf-8');
 }
 
-function formatNoteDate(isoDate: string): string {
-  const d = new Date(isoDate);
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
-}
+const formatNoteDate = formatStoredDate;
 
 export function assembleSystemPrompt(): string {
   // Config files
@@ -86,6 +80,10 @@ export function assembleSystemPrompt(): string {
     `the server resolves them.`,
     `When you need recent workout history, call hevy_get_recent_workouts.`,
     `Results come back summarized with weights already in lbs.`,
+    `Past messages are prefixed with when Dan sent them, e.g. "[Fri 10:33 PM]".`,
+    `They can be up to two days old — trust Current Time above over anything`,
+    `an older message said about the time of day. Never write those prefixes`,
+    `yourself.`,
 
     // First conversation detection
     firstConvo
@@ -103,8 +101,14 @@ export function loadChatHistory(): Array<{
   content: string;
 }> {
   const messages = getRecentMessages({ limit: 30, maxAgeHours: 48 });
+  // History spans up to 48 hours, so past turns are stamped with when they
+  // were sent. Without this Claude reads a flat sequence and treats stale
+  // remarks ("it's night right now") as still true on the next morning.
   return messages.map((m) => ({
     role: m.role as 'user' | 'assistant',
-    content: m.content,
+    content:
+      m.role === 'user'
+        ? `[${formatStoredTime(m.created_at)}] ${m.content}`
+        : m.content,
   }));
 }

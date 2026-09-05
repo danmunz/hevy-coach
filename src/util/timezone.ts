@@ -16,3 +16,32 @@ function resolve(): string {
 }
 
 export const TIMEZONE = resolve();
+
+/**
+ * Parses a SQLite `CURRENT_TIMESTAMP` value ("YYYY-MM-DD HH:MM:SS", always
+ * UTC but carrying no zone marker). `new Date()` would read that shape as
+ * local time and shift it by the machine's offset, so the marker is added
+ * explicitly before parsing.
+ */
+export function parseSqliteTimestamp(value: string): Date {
+  return new Date(`${value.replace(' ', 'T')}Z`);
+}
+
+/** Formats a stored UTC timestamp as a short local date, e.g. "Sep 5". */
+export function formatStoredDate(value: string): string {
+  return parseSqliteTimestamp(value).toLocaleDateString('en-US', {
+    timeZone: TIMEZONE,
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/** Formats a stored UTC timestamp as a local weekday + time, e.g. "Fri 10:33 PM". */
+export function formatStoredTime(value: string): string {
+  return parseSqliteTimestamp(value).toLocaleString('en-US', {
+    timeZone: TIMEZONE,
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
