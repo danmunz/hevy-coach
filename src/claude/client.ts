@@ -76,11 +76,12 @@ export async function chat(userMessage: string): Promise<string> {
     { role: 'user' as const, content: userMessage },
   ]);
 
-  // 4. Tool execution loop — collect text from every iteration since Claude
-  // may include text alongside tool calls (e.g. "Let me check your workouts…")
-  // and then return no text after processing the results.
+  // 4. Tool execution loop. Claude may put text alongside its tool calls
+  // (e.g. "Let me check your workouts…") and then return none at all once the
+  // results come back, so that text is kept only as a fallback for an empty
+  // final response — never appended to one that has its own text.
   let iterations = 0;
-  const collectedText: string[] = [];
+  const preToolText: string[] = [];
 
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations++;
@@ -99,9 +100,6 @@ export async function chat(userMessage: string): Promise<string> {
       (block): block is Anthropic.TextBlock => block.type === 'text',
     );
     const iterationText = textBlocks.map((block) => block.text).join('');
-    if (iterationText) {
-      collectedText.push(iterationText);
-    }
 
     // Check if Claude wants to use tools
     const toolUseBlocks = response.content.filter(
@@ -109,10 +107,9 @@ export async function chat(userMessage: string): Promise<string> {
     );
 
     if (response.stop_reason !== 'tool_use') {
-      // No more tool calls — use text from this iteration, falling back
-      // to text collected from earlier iterations (tool-use responses
-      // often contain the actual coaching message).
-      const finalText = collectedText.join('\n\n');
+      // No more tool calls. Use this iteration's text; only when it is empty
+      // fall back to whatever Claude said before its tool calls.
+      const finalText = iterationText || preToolText.join('\n\n');
 
       if (!finalText) {
         console.warn(
@@ -132,7 +129,12 @@ export async function chat(userMessage: string): Promise<string> {
       return finalText;
     }
 
-    // Claude wants to use tools — append its response to messages
+    // Claude wants to use tools — keep any preamble text as a fallback and
+    // append its response to messages
+    if (iterationText) {
+      preToolText.push(iterationText);
+    }
+
     messages.push({
       role: 'assistant',
       content: response.content,
