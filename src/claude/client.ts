@@ -63,7 +63,7 @@ export async function chat(userMessage: string): Promise<string> {
   const systemPrompt = assembleSystemPrompt();
   const chatHistory = loadChatHistory();
 
-  const model = process.env.CLAUDE_MODEL || 'claude-sonnet-5-20250514';
+  const model = process.env.CLAUDE_MODEL || 'claude-sonnet-5';
 
   // Build the messages array: prior history + current user message (not yet persisted).
   // Both messages are stored AFTER Claude responds successfully to avoid
@@ -76,8 +76,11 @@ export async function chat(userMessage: string): Promise<string> {
     { role: 'user' as const, content: userMessage },
   ]);
 
-  // 4. Tool execution loop
+  // 4. Tool execution loop — collect text from every iteration since Claude
+  // may include text alongside tool calls (e.g. "Let me check your workouts…")
+  // and then return no text after processing the results.
   let iterations = 0;
+  const collectedText: string[] = [];
 
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations++;
@@ -91,23 +94,32 @@ export async function chat(userMessage: string): Promise<string> {
       tools: TOOLS,
     });
 
+    // Extract text from this iteration
+    const textBlocks = response.content.filter(
+      (block): block is Anthropic.TextBlock => block.type === 'text',
+    );
+    const iterationText = textBlocks.map((block) => block.text).join('');
+    if (iterationText) {
+      collectedText.push(iterationText);
+    }
+
     // Check if Claude wants to use tools
     const toolUseBlocks = response.content.filter(
       (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
     );
 
     if (response.stop_reason !== 'tool_use') {
-      // No more tool calls — extract text and finish
-      const textBlocks = response.content.filter(
-        (block): block is Anthropic.TextBlock => block.type === 'text',
-      );
-      if (textBlocks.length === 0) {
+      // No more tool calls — use text from this iteration, falling back
+      // to text collected from earlier iterations (tool-use responses
+      // often contain the actual coaching message).
+      const finalText = collectedText.join('\n\n');
+
+      if (!finalText) {
         console.warn(
-          `[claude] No text blocks in response. stop_reason=${response.stop_reason} ` +
+          `[claude] No text in any iteration. stop_reason=${response.stop_reason} ` +
           `block_types=${response.content.map((b) => b.type).join(',')}`,
         );
       }
-      const finalText = textBlocks.map((block) => block.text).join('');
 
       // Store BOTH messages after success (CRIT-001 fix).
       // Skip both if the assistant response is empty to avoid orphaned
