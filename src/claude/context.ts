@@ -8,7 +8,12 @@ import { getRecentMessages, isFirstConversation } from '../state/chatlog.js';
 const CONFIG_DIR = path.resolve(process.cwd(), 'config');
 
 function readConfigFile(filename: string): string {
-  return fs.readFileSync(path.join(CONFIG_DIR, filename), 'utf-8');
+  try {
+    return fs.readFileSync(path.join(CONFIG_DIR, filename), 'utf-8');
+  } catch {
+    console.warn(`[config] Missing config file: ${filename}`);
+    return '';
+  }
 }
 
 function formatNoteDate(isoDate: string): string {
@@ -32,15 +37,21 @@ export function assembleSystemPrompt(): string {
   const activeNotes = getActiveNotes();
 
   // Current local time
-  const localTime = new Date().toLocaleString('en-US', {
-    timeZone: process.env.TIMEZONE || 'America/New_York',
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  let localTime: string;
+  try {
+    localTime = new Date().toLocaleString('en-US', {
+      timeZone: process.env.TIMEZONE || 'America/New_York',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    console.warn(`[config] Invalid TIMEZONE "${process.env.TIMEZONE}", falling back to UTC`);
+    localTime = new Date().toUTCString();
+  }
 
   // First conversation detection
   const firstConvo = isFirstConversation();

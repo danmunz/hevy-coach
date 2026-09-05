@@ -29,13 +29,18 @@ export function getTrainingMaxes(): TrainingMaxes {
   if (!raw) {
     return { squat: 0, bench: 0, deadlift: 0, ohp: 0 };
   }
-  const parsed = JSON.parse(raw) as Partial<TrainingMaxes>;
-  return {
-    squat: parsed.squat ?? 0,
-    bench: parsed.bench ?? 0,
-    deadlift: parsed.deadlift ?? 0,
-    ohp: parsed.ohp ?? 0,
-  };
+  try {
+    const parsed = JSON.parse(raw) as Partial<TrainingMaxes>;
+    return {
+      squat: parsed.squat ?? 0,
+      bench: parsed.bench ?? 0,
+      deadlift: parsed.deadlift ?? 0,
+      ohp: parsed.ohp ?? 0,
+    };
+  } catch {
+    console.warn('[config] Corrupted training_maxes value, using defaults');
+    return { squat: 0, bench: 0, deadlift: 0, ohp: 0 };
+  }
 }
 
 export function setTrainingMaxes(maxes: Partial<TrainingMaxes>): void {

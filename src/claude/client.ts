@@ -109,9 +109,11 @@ export async function chat(userMessage: string): Promise<string> {
       }
       const finalText = textBlocks.map((block) => block.text).join('');
 
-      // Store BOTH messages after success (CRIT-001 fix)
-      addMessage('user', userMessage);
+      // Store BOTH messages after success (CRIT-001 fix).
+      // Skip both if the assistant response is empty to avoid orphaned
+      // user messages that corrupt subsequent history.
       if (finalText) {
+        addMessage('user', userMessage);
         addMessage('assistant', finalText);
       }
 
