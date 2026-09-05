@@ -77,7 +77,12 @@ bot.on('text', async (ctx) => {
     clearInterval(typingInterval);
 
     const sanitized = sanitizeHtml(response);
-    await sendSplitMessages(ctx, sanitized);
+    if (!sanitized.trim()) {
+      console.warn('[telegram] Claude returned empty response, sending fallback');
+      await ctx.reply("I couldn't generate a response. Try again in a moment.");
+    } else {
+      await sendSplitMessages(ctx, sanitized);
+    }
   } catch (error) {
     clearInterval(typingInterval);
     console.error('[telegram] Error processing message:', error);
