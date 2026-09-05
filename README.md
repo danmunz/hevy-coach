@@ -80,7 +80,7 @@ npm run chat
 | `ANTHROPIC_API_KEY` | Yes | Anthropic API key |
 | `HEVY_API_KEY` | Yes | Hevy API key (Pro subscription required) |
 | `AUTHORIZED_CHAT_ID` | Yes | Your Telegram chat ID — only this user can talk to the bot |
-| `CLAUDE_MODEL` | No | Claude model to use (default: `claude-sonnet-5-20250514`) |
+| `CLAUDE_MODEL` | No | Claude model to use (default: `claude-sonnet-5`) |
 | `TIMEZONE` | No | Your timezone for local time display (default: `America/New_York`) |
 
 ### What `npm run setup` does
@@ -283,7 +283,7 @@ If Claude asks for an exercise that isn't pinned, it falls back to fuzzy search 
 
 ### 7. Environment variables (`.env`)
 
-`CLAUDE_MODEL` lets you swap models. `claude-sonnet-5-20250514` is the default — fast and cheap (~$0.01-0.03 per conversation). You could use `claude-opus-4-20250514` for more nuanced coaching at higher cost.
+`CLAUDE_MODEL` lets you swap models. `claude-sonnet-5` is the default — fast and cheap (~$0.01-0.03 per conversation). You could use `claude-opus-5` for more nuanced coaching at higher cost.
 
 `TIMEZONE` affects the local time shown in the system prompt, which helps the coach know if it's morning, afternoon, or late at night.
 
