@@ -4,7 +4,7 @@ import path from 'node:path';
 import { getConfig, getTrainingMaxes } from '../state/config.js';
 import { getActiveNotes } from '../state/notes.js';
 import { getRecentMessages, isFirstConversation } from '../state/chatlog.js';
-import { TIMEZONE } from '../util/timezone.js';
+import { TIMEZONE, formatStoredDate } from '../util/timezone.js';
 
 const CONFIG_DIR = path.resolve(process.cwd(), 'config');
 
@@ -15,13 +15,7 @@ function readConfigFile(filename: string): string {
   return fs.readFileSync(path.join(CONFIG_DIR, filename), 'utf-8');
 }
 
-function formatNoteDate(isoDate: string): string {
-  const d = new Date(isoDate);
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
-}
+const formatNoteDate = formatStoredDate;
 
 export function assembleSystemPrompt(): string {
   // Config files
