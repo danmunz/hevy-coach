@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import type Anthropic from '@anthropic-ai/sdk';
+
 import { getConfig, getTrainingMaxes } from '../state/config.js';
 import { getActiveNotes } from '../state/notes.js';
 import { getRecentMessages, isFirstConversation } from '../state/chatlog.js';
@@ -17,7 +19,18 @@ function readConfigFile(filename: string): string {
 
 const formatNoteDate = formatStoredDate;
 
-export function assembleSystemPrompt(): string {
+/**
+ * Builds the system prompt as two blocks: a cacheable prefix of the four
+ * config files, then the per-request state. Render order is tools → system →
+ * messages, so the breakpoint on the first block also caches the tool
+ * definitions — roughly 4,400 tokens that are otherwise re-billed on every
+ * call, twice per user message.
+ *
+ * Hot-reload (AGENTS.md §7.2) is unaffected: the files are still read from
+ * disk on every message, and the cache is content-addressed, so an edit
+ * changes the key and simply re-warms on the next call.
+ */
+export function assembleSystemPrompt(): Anthropic.TextBlockParam[] {
   // Config files
   const coachMd = readConfigFile('coach.md');
   const equipmentMd = readConfigFile('equipment.md');
@@ -50,13 +63,18 @@ export function assembleSystemPrompt(): string {
     `OHP: ${trainingMaxes.ohp} lbs`,
   ].join('\n');
 
-  const systemPrompt = [
-    // Config files
-    coachMd,
-    equipmentMd,
-    programMd,
-    rulesMd,
+  // Static half: read from disk, identical between requests until the user
+  // edits a config file. Marked for caching below. The explicit trailing
+  // '\n\n' reproduces the separator the single-string version produced, so the
+  // rendered prompt is byte-identical to before rather than relying on however
+  // the API joins adjacent system blocks.
+  const cacheablePrefix =
+    [coachMd, equipmentMd, programMd, rulesMd].join('\n\n') + '\n\n';
 
+  // Volatile half: SQLite state and the clock. Never marked for caching — the
+  // time changes every minute, so a breakpoint here would pay a write per
+  // minute for no reads.
+  const volatileSuffix = [
     // Current state
     `## Current Training Maxes\n${trainingMaxesStr}`,
     `## Current Goals\n${goals ?? ''}`,
@@ -93,7 +111,16 @@ export function assembleSystemPrompt(): string {
     .filter(Boolean)
     .join('\n\n');
 
-  return systemPrompt;
+  // Zero-length text blocks are rejected by the API; volatileSuffix always has
+  // Current Time today, but the filter keeps a future edit from causing a 400.
+  return [
+    {
+      type: 'text' as const,
+      text: cacheablePrefix,
+      cache_control: { type: 'ephemeral' as const },
+    },
+    { type: 'text' as const, text: volatileSuffix },
+  ].filter((block) => block.text.length > 0);
 }
 
 export function loadChatHistory(): Array<{
