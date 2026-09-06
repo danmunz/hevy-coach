@@ -12,6 +12,10 @@ import { addMessage } from '../state/chatlog.js';
 
 const MAX_TOOL_ITERATIONS = 10;
 
+// A full hevy_push_routine call spells out every set as its own JSON object, so
+// a whole workout runs to thousands of tokens. 4096 truncated those mid-call.
+const MAX_OUTPUT_TOKENS = 16000;
+
 // ---------------------------------------------------------------------------
 // History sanitizer
 // ---------------------------------------------------------------------------
@@ -89,7 +93,7 @@ export async function chat(userMessage: string): Promise<string> {
     console.log(`[claude] Calling model=${model} messages=${messages.length} iteration=${iterations}`);
     const response = await anthropic.messages.create({
       model,
-      max_tokens: 4096,
+      max_tokens: MAX_OUTPUT_TOKENS,
       system: systemPrompt,
       messages,
       tools: TOOLS,
@@ -101,6 +105,28 @@ export async function chat(userMessage: string): Promise<string> {
     );
     const iterationText = textBlocks.map((block) => block.text).join('');
 
+    console.log(
+      `[claude] stop_reason=${response.stop_reason} ` +
+        `blocks=${response.content.map((b) => b.type).join(',') || 'none'} ` +
+        `out_tokens=${response.usage.output_tokens}`,
+    );
+
+    // max_tokens means the turn was cut off mid-thought — often partway through
+    // a tool call, which leaves no text and an unusable partial block. Treating
+    // it as a normal finish silently swallows the truncation.
+    if (response.stop_reason === 'max_tokens') {
+      console.error(
+        `[claude] Response truncated at the ${MAX_OUTPUT_TOKENS}-token cap ` +
+          `on iteration ${iterations}; discarding the partial turn.`,
+      );
+      const truncatedNotice =
+        "That answer ran long and got cut off before I could finish. " +
+        'Ask me again — I\'ll keep it tighter.';
+      addMessage('user', userMessage);
+      addMessage('assistant', truncatedNotice);
+      return truncatedNotice;
+    }
+
     // Check if Claude wants to use tools
     const toolUseBlocks = response.content.filter(
       (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
@@ -111,10 +137,18 @@ export async function chat(userMessage: string): Promise<string> {
       // fall back to whatever Claude said before its tool calls.
       const finalText = iterationText || preToolText.join('\n\n');
 
-      if (!finalText) {
+      // Falling back means Claude finished without answering and the user gets
+      // a stale "let me check…" preamble instead. Say so loudly — this used to
+      // be invisible because only the fully-empty case warned.
+      if (!iterationText && preToolText.length > 0) {
+        console.warn(
+          `[claude] Final turn had no text (stop_reason=${response.stop_reason}); ` +
+            'replying with the pre-tool preamble instead.',
+        );
+      } else if (!finalText) {
         console.warn(
           `[claude] No text in any iteration. stop_reason=${response.stop_reason} ` +
-          `block_types=${response.content.map((b) => b.type).join(',')}`,
+            `block_types=${response.content.map((b) => b.type).join(',')}`,
         );
       }
 
