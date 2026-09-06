@@ -181,11 +181,17 @@ export async function chat(userMessage: string): Promise<string> {
       content: response.content,
     });
 
-    // Execute the tool calls. Reads run concurrently — Claude routinely asks
-    // for recent workouts and routines in one turn, and serializing those
-    // Hevy round-trips costs wall time for nothing. Writes stay sequential so
-    // two of them can't interleave their read-modify-write of the stored
-    // routine state. Results are keyed by tool_use_id, so order is free.
+    // Execute the tool calls in the order Claude asked, running consecutive
+    // read-only tools concurrently — it routinely wants recent workouts and
+    // routines in one turn, and serializing those Hevy round-trips costs wall
+    // time for nothing.
+    //
+    // A write acts as a barrier: it waits for the reads queued before it, and
+    // the reads after it wait for the write. Relative order has to hold, not
+    // just the order results are presented in. Claude asking to push a routine
+    // and then list routines means the list must observe the push; running the
+    // read early and reordering the results afterwards would quietly report
+    // pre-write state as though it came after.
     const runTool = async (
       toolBlock: Anthropic.ToolUseBlock,
     ): Promise<Anthropic.ToolResultBlockParam> => {
@@ -205,23 +211,26 @@ export async function chat(userMessage: string): Promise<string> {
       };
     };
 
-    const readBlocks = toolUseBlocks.filter((b) => READ_ONLY_TOOLS.has(b.name));
-    const writeBlocks = toolUseBlocks.filter((b) => !READ_ONLY_TOOLS.has(b.name));
-
     // execute() never throws — it catches internally and returns the error as
     // a conversational string — so Promise.all cannot reject here.
-    const readResults = await Promise.all(readBlocks.map(runTool));
+    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    let pendingReads: Anthropic.ToolUseBlock[] = [];
 
-    const writeResults: Anthropic.ToolResultBlockParam[] = [];
-    for (const toolBlock of writeBlocks) {
-      writeResults.push(await runTool(toolBlock));
+    const flushReads = async (): Promise<void> => {
+      if (pendingReads.length === 0) return;
+      toolResults.push(...(await Promise.all(pendingReads.map(runTool))));
+      pendingReads = [];
+    };
+
+    for (const toolBlock of toolUseBlocks) {
+      if (READ_ONLY_TOOLS.has(toolBlock.name)) {
+        pendingReads.push(toolBlock);
+      } else {
+        await flushReads();
+        toolResults.push(await runTool(toolBlock));
+      }
     }
-
-    // Restore the order Claude asked in, rather than reads-then-writes.
-    const byId = new Map(
-      [...readResults, ...writeResults].map((r) => [r.tool_use_id, r]),
-    );
-    const toolResults = toolUseBlocks.map((b) => byId.get(b.id)!);
+    await flushReads();
 
     // Append tool results as a user message
     messages.push({
