@@ -166,6 +166,7 @@ function apiError(message: string, suggestion: string): HevyApiError {
 export class HevyClient {
   private readonly apiKey: string;
   private templateCache: HevyTemplateMatch[] | null = null;
+  private templatePromise: Promise<HevyTemplateMatch[]> | null = null;
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey ?? process.env.HEVY_API_KEY ?? "";
@@ -537,10 +538,25 @@ export class HevyClient {
    * 3-4 requests instead of 30+.
    *
    * Call this once during setup; subsequent calls return the cache.
+   *
+   * Concurrent callers share one in-flight request. Caching only the finished
+   * array would let simultaneous callers on a cold cache each run the full
+   * pagination, multiplying the API calls for identical data.
    */
   async fetchAllTemplates(): Promise<HevyTemplateMatch[]> {
     if (this.templateCache) return this.templateCache;
 
+    if (!this.templatePromise) {
+      // Cleared on settle so a failed fetch doesn't poison later calls.
+      this.templatePromise = this.doFetchAllTemplates().finally(() => {
+        this.templatePromise = null;
+      });
+    }
+
+    return this.templatePromise;
+  }
+
+  private async doFetchAllTemplates(): Promise<HevyTemplateMatch[]> {
     const templates: HevyTemplateMatch[] = [];
     let page = 1;
     const pageSize = 100; // API max
