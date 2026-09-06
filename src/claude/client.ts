@@ -91,6 +91,7 @@ export async function chat(userMessage: string): Promise<string> {
     iterations++;
 
     console.log(`[claude] Calling model=${model} messages=${messages.length} iteration=${iterations}`);
+    const iterationStart = Date.now();
     const response = await anthropic.messages.create({
       model,
       max_tokens: MAX_OUTPUT_TOKENS,
@@ -105,10 +106,16 @@ export async function chat(userMessage: string): Promise<string> {
     );
     const iterationText = textBlocks.map((block) => block.text).join('');
 
+    // cache_w/cache_r are the only way to tell a working cache from a silently
+    // missing one. Both are number|null in SDK 0.39.0, hence the `?? 0`.
     console.log(
       `[claude] stop_reason=${response.stop_reason} ` +
         `blocks=${response.content.map((b) => b.type).join(',') || 'none'} ` +
-        `out_tokens=${response.usage.output_tokens}`,
+        `in=${response.usage.input_tokens} ` +
+        `cache_w=${response.usage.cache_creation_input_tokens ?? 0} ` +
+        `cache_r=${response.usage.cache_read_input_tokens ?? 0} ` +
+        `out=${response.usage.output_tokens} ` +
+        `ms=${Date.now() - iterationStart}`,
     );
 
     // max_tokens means the turn was cut off mid-thought — often partway through
