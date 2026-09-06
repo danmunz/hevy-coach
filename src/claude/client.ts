@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 import { assembleSystemPrompt, loadChatHistory } from './context.js';
 import { TOOLS } from './tools.js';
-import { ToolExecutor } from './tool-executor.js';
+import { READ_ONLY_TOOLS, ToolExecutor } from './tool-executor.js';
 import { HevyClient } from '../hevy/client.js';
 import { addMessage } from '../state/chatlog.js';
 
@@ -181,10 +181,15 @@ export async function chat(userMessage: string): Promise<string> {
       content: response.content,
     });
 
-    // Execute each tool call and build tool_result blocks
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
-
-    for (const toolBlock of toolUseBlocks) {
+    // Execute the tool calls. Reads run concurrently — Claude routinely asks
+    // for recent workouts and routines in one turn, and serializing those
+    // Hevy round-trips costs wall time for nothing. Writes stay sequential so
+    // two of them can't interleave their read-modify-write of the stored
+    // routine state. Results are keyed by tool_use_id, so order is free.
+    const runTool = async (
+      toolBlock: Anthropic.ToolUseBlock,
+    ): Promise<Anthropic.ToolResultBlockParam> => {
+      const started = Date.now();
       console.log(`[tool] ${toolBlock.name}(${JSON.stringify(toolBlock.input)})`);
 
       const result = await toolExecutor.execute(
@@ -192,12 +197,31 @@ export async function chat(userMessage: string): Promise<string> {
         toolBlock.input as Record<string, unknown>,
       );
 
-      toolResults.push({
+      console.log(`[tool] ${toolBlock.name} done in ${Date.now() - started}ms`);
+      return {
         type: 'tool_result',
         tool_use_id: toolBlock.id,
         content: result,
-      });
+      };
+    };
+
+    const readBlocks = toolUseBlocks.filter((b) => READ_ONLY_TOOLS.has(b.name));
+    const writeBlocks = toolUseBlocks.filter((b) => !READ_ONLY_TOOLS.has(b.name));
+
+    // execute() never throws — it catches internally and returns the error as
+    // a conversational string — so Promise.all cannot reject here.
+    const readResults = await Promise.all(readBlocks.map(runTool));
+
+    const writeResults: Anthropic.ToolResultBlockParam[] = [];
+    for (const toolBlock of writeBlocks) {
+      writeResults.push(await runTool(toolBlock));
     }
+
+    // Restore the order Claude asked in, rather than reads-then-writes.
+    const byId = new Map(
+      [...readResults, ...writeResults].map((r) => [r.tool_use_id, r]),
+    );
+    const toolResults = toolUseBlocks.map((b) => byId.get(b.id)!);
 
     // Append tool results as a user message
     messages.push({
