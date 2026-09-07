@@ -184,19 +184,20 @@ test('fixture seed resets every scratch state to the same known baseline', () =>
   assert.equal((getDb().prepare('SELECT COUNT(*) AS count FROM messages').get() as { count: number }).count, 2);
 });
 
-test('dry-run evaluator launches isolated workers and emits a parseable artifact', () => {
+test('production dry-run evaluator launches isolated workers and emits a parseable artifact', () => {
   const scriptPath = path.resolve('scripts/evaluate-effort.ts');
-  const child = spawnSync(process.execPath, ['--import', 'tsx', scriptPath, 'pair', '1', '--dry-run'], {
+  const child = spawnSync(process.execPath, ['--import', 'tsx', scriptPath, 'production', '1', '--dry-run'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     timeout: 30_000,
   });
   assert.equal(child.status, 1, child.stderr);
-  const summary = JSON.parse(child.stdout) as { artifactPath: string; passed: number; failed: number; promotionEligible: boolean };
+  const summary = JSON.parse(child.stdout) as { artifactPath: string; passed: number; failed: number; promotionEligible: boolean; budgetUsd: number };
   try {
     assert.equal(summary.passed, 8);
     assert.equal(summary.failed, 0);
     assert.equal(summary.promotionEligible, false);
+    assert.equal(summary.budgetUsd, 125);
     const artifact = JSON.parse(fs.readFileSync(summary.artifactPath, 'utf8')) as {
       results: Array<{ dryRun?: boolean; effort: string }>;
       comparison: { high: { cases: number }; medium: { cases: number } };

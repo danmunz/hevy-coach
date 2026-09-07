@@ -13,18 +13,22 @@ const EVALUATION_MAX_OUTPUT_TOKENS = 2048;
 const EVALUATION_MAX_TOOL_ITERATIONS = 3;
 const MAX_EVALUATION_REQUEST_BYTES = 31_000;
 const MAX_EVALUATION_INPUT_TOKENS = 32_000;
-const CAMPAIGN_BUDGET_USD = 25;
+const SCREENING_BUDGET_USD = 25;
+const PRODUCTION_MAX_OUTPUT_TOKENS = 16_000;
+const PRODUCTION_MAX_TOOL_ITERATIONS = 10;
+const PRODUCTION_BUDGET_USD = 125;
 const requestedMode = process.argv[2] ?? 'pair';
 const repetitions = Number(process.argv[3] ?? MAX_REPETITIONS);
 const dryRun = process.argv.includes('--dry-run');
 const workerScenarioId = process.env.HEVY_COACH_EFFORT_SCENARIO_ID;
 const workerEffort = process.env.HEVY_COACH_EFFORT as ModelEffort | undefined;
+const workerCampaignMode = process.env.HEVY_COACH_EFFORT_CAMPAIGN_MODE;
 
 if (
-  (requestedMode !== 'pair' && !ALLOWED_EFFORTS.has(requestedMode as ModelEffort)) ||
+  (requestedMode !== 'pair' && requestedMode !== 'production' && !ALLOWED_EFFORTS.has(requestedMode as ModelEffort)) ||
   !Number.isInteger(repetitions) || repetitions < 1 || repetitions > MAX_REPETITIONS
 ) {
-  console.error('Usage: tsx scripts/evaluate-effort.ts <pair|medium|high> [1-5 repetitions] [--dry-run]');
+  console.error('Usage: tsx scripts/evaluate-effort.ts <pair|production|medium|high> [1-5 repetitions] [--dry-run]');
   process.exit(1);
 }
 
@@ -65,7 +69,7 @@ interface WorkerResult {
 interface AggregateArtifact {
   generatedAt: string;
   model: string;
-  mode: 'pair' | ModelEffort;
+  mode: 'pair' | 'production' | ModelEffort;
   repetitions: number;
   pricing: Pricing;
   budget: {
@@ -74,7 +78,7 @@ interface AggregateArtifact {
     reservedUsd: number;
     observedUsd: number;
   };
-  /** Always false: this bounded campaign is a safe screening benchmark. */
+  /** True only for a passing production-equivalent paired campaign. */
   promotionEligible: boolean;
   screeningPass: boolean;
   limitation: string;
@@ -134,12 +138,11 @@ function estimateCost(modelCalls: readonly ModelCallMetrics[], pricing: Pricing)
  * assumes every request uses the full bounded input/output caps and charges the
  * cache-write rate, which is more expensive than a cache read.
  */
-function maximumWorkerCost(pricing: Pricing): number {
-  const iterations = EVALUATION_MAX_TOOL_ITERATIONS;
+function maximumWorkerCost(pricing: Pricing, outputTokens: number, iterations: number): number {
   return iterations * (
     MAX_EVALUATION_INPUT_TOKENS * pricing.input / 1_000_000 +
     MAX_EVALUATION_INPUT_TOKENS * pricing.cacheWrite / 1_000_000 +
-    EVALUATION_MAX_OUTPUT_TOKENS * pricing.output / 1_000_000
+    outputTokens * pricing.output / 1_000_000
   );
 }
 
@@ -193,6 +196,7 @@ async function runWorker(): Promise<void> {
   const outputPath = process.env.HEVY_COACH_EFFORT_OUTPUT_PATH;
   const repetition = Number(process.env.HEVY_COACH_EFFORT_REPETITION);
   const isDryRun = process.env.HEVY_COACH_EFFORT_DRY_RUN === '1';
+  const isProductionCampaign = workerCampaignMode === 'production';
   if (!workerScenarioId || !workerEffort || !outputPath || !Number.isInteger(repetition)) {
     throw new Error('Effort evaluation worker is missing its scenario, effort, output path, or repetition.');
   }
@@ -228,18 +232,18 @@ async function runWorker(): Promise<void> {
       persist: true,
       effort: workerEffort,
       hevyClient: fixture,
-      maxOutputTokens: EVALUATION_MAX_OUTPUT_TOKENS,
-      maxToolIterations: EVALUATION_MAX_TOOL_ITERATIONS,
+      maxOutputTokens: isProductionCampaign ? PRODUCTION_MAX_OUTPUT_TOKENS : EVALUATION_MAX_OUTPUT_TOKENS,
+      maxToolIterations: isProductionCampaign ? PRODUCTION_MAX_TOOL_ITERATIONS : EVALUATION_MAX_TOOL_ITERATIONS,
       maxRequestBytes: MAX_EVALUATION_REQUEST_BYTES,
       onModelCall: (metrics) => modelCalls.push(metrics),
       onToolCall: (metrics) => toolCalls.push(metrics),
     });
     const assessment = fixtures.assessFixtureScenario(scenario, toolCalls, fixture);
     if (modelCalls.some((call) => call.stopReason === 'max_tokens')) {
-      assessment.failures.push('Model response was truncated at the evaluation output cap.');
+      assessment.failures.push(`Model response was truncated at the ${isProductionCampaign ? 'production' : 'screening'} output cap.`);
     }
     if (response.startsWith('[Max tool iterations reached.')) {
-      assessment.failures.push('Model reached the evaluation tool-iteration cap without a final response.');
+      assessment.failures.push(`Model reached the ${isProductionCampaign ? 'production' : 'screening'} tool-iteration cap without a final response.`);
     }
     writeJson(outputPath, {
       scenario: scenario.id, repetition, model, effort: workerEffort, response, responseLength: response.length,
@@ -264,24 +268,29 @@ function runParent(): void {
   const model = process.env.CLAUDE_MODEL || 'claude-sonnet-5';
   const pricing = pricingFor(model);
   if (!pricing) throw new Error(`No audited pricing is configured for ${model}.`);
-  const mode = requestedMode as 'pair' | ModelEffort;
-  const efforts = mode === 'pair' ? EVALUATION_EFFORTS : [mode];
+  const mode = requestedMode as 'pair' | 'production' | ModelEffort;
+  const isProductionCampaign = mode === 'production';
+  const isPairedCampaign = mode === 'pair' || isProductionCampaign;
+  const efforts = isPairedCampaign ? EVALUATION_EFFORTS : [mode];
+  const outputTokens = isProductionCampaign ? PRODUCTION_MAX_OUTPUT_TOKENS : EVALUATION_MAX_OUTPUT_TOKENS;
+  const toolIterations = isProductionCampaign ? PRODUCTION_MAX_TOOL_ITERATIONS : EVALUATION_MAX_TOOL_ITERATIONS;
+  const budgetUsd = isProductionCampaign ? PRODUCTION_BUDGET_USD : SCREENING_BUDGET_USD;
   const artifactDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hevy-coach-effort-results-'));
   const scriptPath = path.resolve(process.argv[1] ?? 'scripts/evaluate-effort.ts');
   const scenarioIds = ['history_analysis', 'pain_note', 'training_max_approval', 'approved_routine_push'];
-  const workerReservationUsd = maximumWorkerCost(pricing);
+  const workerReservationUsd = maximumWorkerCost(pricing, outputTokens, toolIterations);
   const results: WorkerResult[] = [];
   let reservedUsd = 0;
   let observedUsd = 0;
   let budgetExhausted = false;
 
   for (let repetition = 1; repetition <= repetitions; repetition++) {
-    const counterbalancedEfforts = mode === 'pair' && repetition % 2 === 0
+    const counterbalancedEfforts = isPairedCampaign && repetition % 2 === 0
       ? [...efforts].reverse()
       : efforts;
     for (const scenarioId of scenarioIds) {
       for (const effort of counterbalancedEfforts) {
-        if (reservedUsd + workerReservationUsd > CAMPAIGN_BUDGET_USD) {
+        if (reservedUsd + workerReservationUsd > budgetUsd) {
           budgetExhausted = true;
           break;
         }
@@ -296,6 +305,7 @@ function runParent(): void {
               ...process.env,
               HEVY_COACH_EFFORT_SCENARIO_ID: scenarioId,
               HEVY_COACH_EFFORT: effort,
+              HEVY_COACH_EFFORT_CAMPAIGN_MODE: mode,
               HEVY_COACH_EFFORT_REPETITION: String(repetition),
               HEVY_COACH_EFFORT_OUTPUT_PATH: outputPath,
               HEVY_COACH_DB_PATH: scratchDbPath,
@@ -326,19 +336,21 @@ function runParent(): void {
   if (budgetExhausted) {
     results.push({
       scenario: 'budget_guard', repetition: 0, model, effort: efforts.at(-1)!, response: '', responseLength: 0, elapsedMs: 0,
-      passed: false, failures: [`Campaign stopped before exceeding its $${CAMPAIGN_BUDGET_USD} budget.`],
+      passed: false, failures: [`Campaign stopped before exceeding its $${budgetUsd} budget.`],
       modelCalls: [], toolCalls: [], fixtureCalls: [], routineWrites: [], cost: estimateCost([], pricing),
     });
   }
-  const comparison = mode === 'pair' ? compareEfforts(results, repetitions) : null;
-  const screeningPass = mode === 'pair' && repetitions === MAX_REPETITIONS && !dryRun && !budgetExhausted &&
+  const comparison = isPairedCampaign ? compareEfforts(results, repetitions) : null;
+  const campaignPass = isPairedCampaign && repetitions === MAX_REPETITIONS && !dryRun && !budgetExhausted &&
     comparison != null && comparison.allGuardrailsPass && comparison.meetsImprovementThreshold && comparison.hasNoRegression;
   const artifact: AggregateArtifact = {
     generatedAt: new Date().toISOString(), model, mode, repetitions, pricing,
-    budget: { limitUsd: CAMPAIGN_BUDGET_USD, perWorkerReservationUsd: workerReservationUsd, reservedUsd, observedUsd },
-    promotionEligible: false,
-    screeningPass,
-    limitation: `This campaign caps each request at ${EVALUATION_MAX_OUTPUT_TOKENS} output tokens and ${EVALUATION_MAX_TOOL_ITERATIONS} tool iterations to stay within its $${CAMPAIGN_BUDGET_USD} ceiling. It cannot promote a production effort setting.`,
+    budget: { limitUsd: budgetUsd, perWorkerReservationUsd: workerReservationUsd, reservedUsd, observedUsd },
+    promotionEligible: isProductionCampaign && campaignPass,
+    screeningPass: !isProductionCampaign && campaignPass,
+    limitation: isProductionCampaign
+      ? `This campaign matches the production output and tool-iteration limits. Its ${MAX_EVALUATION_REQUEST_BYTES}-byte request guard rejects unexpectedly expanded fixture context before the model call.`
+      : `This campaign caps each request at ${EVALUATION_MAX_OUTPUT_TOKENS} output tokens and ${EVALUATION_MAX_TOOL_ITERATIONS} tool iterations to stay within its $${SCREENING_BUDGET_USD} ceiling. It cannot promote a production effort setting.`,
     comparison,
     results,
     totals: {
@@ -355,9 +367,9 @@ function runParent(): void {
     artifactPath, model, mode, repetitions, promotionEligible: artifact.promotionEligible, screeningPass: artifact.screeningPass,
     passed: artifact.totals.passed, failed: artifact.totals.failed,
     totalElapsedMs: artifact.totals.totalElapsedMs, totalCostUsd: artifact.totals.totalCostUsd,
-    budgetUsd: CAMPAIGN_BUDGET_USD,
+    budgetUsd,
   }, null, 2));
-  if (artifact.totals.failed > 0 || !artifact.screeningPass) process.exitCode = 1;
+  if (artifact.totals.failed > 0 || !campaignPass) process.exitCode = 1;
 }
 
 if (workerScenarioId) {

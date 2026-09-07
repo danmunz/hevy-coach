@@ -125,6 +125,20 @@ this is a screening benchmark and cannot change the production effort setting.
 `npm run evaluate:effort -- high 1 --dry-run` is a no-model worker-isolation
 smoke test and cannot support a screening decision.
 
+### Production-equivalent effort evaluation
+
+After the bounded screening passes, run the production-equivalent campaign:
+
+```bash
+npm run evaluate:effort:production
+```
+
+It retains the fixture-only Hevy client and isolated scratch state, but uses
+the production limits of 16,000 output tokens and 10 tool iterations. It
+reserves up to $125 before it starts. A passing campaign may recommend
+`medium` when every guardrail passes, one performance measure improves by at
+least 15%, and the other measure does not regress by more than 5%.
+
 ### 2. Run the Telegram bot (foreground)
 
 ```bash
