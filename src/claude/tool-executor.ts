@@ -6,6 +6,18 @@ import { saveNote, clearNote } from "../state/notes.js";
 import { getDb } from "../state/db.js";
 import { clearPendingHevyMutation, confirmHevyMutation, getPendingHevyMutation, markHevyMutationPending } from "../state/routine-state.js";
 
+export interface ToolOutcome {
+  result: string;
+  status: 'success' | 'error' | 'blocked';
+}
+
+/** Carries an explicit outcome without changing the conversational result. */
+class ToolResultError extends Error {
+  constructor(message: string, readonly status: 'error' | 'blocked' = 'error') {
+    super(message);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -93,7 +105,7 @@ async function ensureRemoteRoutineCanBeOverwritten(
   );
   const remote = await client.getRoutineSnapshot(routineId);
   if ("error" in remote) {
-    return `I could not check the current Hevy routine before overwriting it: ${remote.message} ${remote.suggestion}`;
+    throw new ToolResultError(`I could not check the current Hevy routine before overwriting it: ${remote.message} ${remote.suggestion}`);
   }
   if (!routineSnapshotsMatch(expected, remote)) {
     return 'The standing routine has changed in Hevy since the bot last confirmed it. Ask the user whether to replace those external changes. Only after explicit confirmation, retry with overwrite_external_changes: true.';
@@ -184,43 +196,61 @@ export class ToolExecutor {
     toolName: string,
     toolInput: Record<string, unknown>,
   ): Promise<string> {
+    return (await this.executeWithOutcome(toolName, toolInput)).result;
+  }
+
+  async executeWithOutcome(
+    toolName: string,
+    toolInput: Record<string, unknown>,
+  ): Promise<ToolOutcome> {
     try {
-      if (!READ_ONLY_TOOLS.has(toolName) && this.options.allowMutations === false) {
-        return `Demo mode blocked ${toolName}. Reads are live, but notes, training maxes, and Hevy writes are disabled.`;
-      }
-      if (
-        (toolName === "hevy_push_routine" || toolName === "hevy_edit_routine_exercise") &&
-        this.options.allowHevyWrites === false
-      ) {
-        return `Demo mode blocked ${toolName}. It can update scratch coaching state, but never changes a live Hevy routine.`;
-      }
-      if ((toolName === "hevy_push_routine" || toolName === "hevy_edit_routine_exercise") && getPendingHevyMutation()) {
-        return 'A previous Hevy routine write has an unknown outcome. Check Hevy and resolve that write before changing the routine again.';
-      }
-      // Keep READ_ONLY_TOOLS in sync with the cases below when adding a tool.
-      switch (toolName) {
-        case "hevy_get_recent_workouts":
-          return await this.getRecentWorkouts(toolInput);
-        case "hevy_get_exercise_history":
-          return await this.getExerciseHistory(toolInput);
-        case "hevy_get_routines":
-          return await this.getRoutines();
-        case "hevy_push_routine":
-          return await this.pushRoutine(toolInput);
-        case "hevy_edit_routine_exercise":
-          return await this.editRoutineExercise(toolInput);
-        case "save_note":
-          return await this.handleSaveNote(toolInput);
-        case "clear_note":
-          return await this.handleClearNote(toolInput);
-        case "update_training_maxes":
-          return await this.handleUpdateTrainingMaxes(toolInput);
-        default:
-          return `Unknown tool "${toolName}". Available tools: hevy_get_recent_workouts, hevy_get_exercise_history, hevy_get_routines, hevy_push_routine, hevy_edit_routine_exercise, save_note, clear_note, update_training_maxes.`;
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return `Something went wrong running "${toolName}": ${msg}. Want me to try again?`;
+      return { result: await this.executeResult(toolName, toolInput), status: 'success' };
+    } catch (error) {
+      if (error instanceof ToolResultError) return { result: error.message, status: error.status };
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        result: `Something went wrong running "${toolName}": ${message}. Want me to try again?`,
+        status: 'error',
+      };
+    }
+  }
+
+  private async executeResult(
+    toolName: string,
+    toolInput: Record<string, unknown>,
+  ): Promise<string> {
+    if (!READ_ONLY_TOOLS.has(toolName) && this.options.allowMutations === false) {
+      throw new ToolResultError(`Demo mode blocked ${toolName}. Reads are live, but notes, training maxes, and Hevy writes are disabled.`, 'blocked');
+    }
+    if (
+      (toolName === "hevy_push_routine" || toolName === "hevy_edit_routine_exercise") &&
+      this.options.allowHevyWrites === false
+    ) {
+      throw new ToolResultError(`Demo mode blocked ${toolName}. It can update scratch coaching state, but never changes a live Hevy routine.`, 'blocked');
+    }
+    if ((toolName === "hevy_push_routine" || toolName === "hevy_edit_routine_exercise") && getPendingHevyMutation()) {
+      throw new ToolResultError('A previous Hevy routine write has an unknown outcome. Check Hevy and resolve that write before changing the routine again.', 'blocked');
+    }
+    // Keep READ_ONLY_TOOLS in sync with the cases below when adding a tool.
+    switch (toolName) {
+      case "hevy_get_recent_workouts":
+        return await this.getRecentWorkouts(toolInput);
+      case "hevy_get_exercise_history":
+        return await this.getExerciseHistory(toolInput);
+      case "hevy_get_routines":
+        return await this.getRoutines();
+      case "hevy_push_routine":
+        return await this.pushRoutine(toolInput);
+      case "hevy_edit_routine_exercise":
+        return await this.editRoutineExercise(toolInput);
+      case "save_note":
+        return await this.handleSaveNote(toolInput);
+      case "clear_note":
+        return await this.handleClearNote(toolInput);
+      case "update_training_maxes":
+        return await this.handleUpdateTrainingMaxes(toolInput);
+      default:
+        throw new ToolResultError(`Unknown tool "${toolName}". Available tools: hevy_get_recent_workouts, hevy_get_exercise_history, hevy_get_routines, hevy_push_routine, hevy_edit_routine_exercise, save_note, clear_note, update_training_maxes.`);
     }
   }
 
@@ -238,7 +268,7 @@ export class ToolExecutor {
     if (typeof result === "string") return result;
 
     // HevyApiError
-    return `Couldn't fetch recent workouts -- ${result.message}. ${result.suggestion}`;
+    throw new ToolResultError(`Couldn't fetch recent workouts -- ${result.message}. ${result.suggestion}`);
   }
 
   private async getExerciseHistory(
@@ -246,7 +276,7 @@ export class ToolExecutor {
   ): Promise<string> {
     const exerciseName = input.exercise_name as string;
     if (!exerciseName) {
-      return "Need an exercise name to look up history. Which exercise?";
+      throw new ToolResultError("Need an exercise name to look up history. Which exercise?");
     }
 
     const exerciseMap = loadExerciseMap();
@@ -258,7 +288,7 @@ export class ToolExecutor {
     );
 
     if (!templateId) {
-      return `Couldn't find "${exerciseName}" in the exercise library. Check the spelling or try the full name (e.g. "Bench Press" instead of "bench").`;
+      throw new ToolResultError(`Couldn't find "${exerciseName}" in the exercise library. Check the spelling or try the full name (e.g. "Bench Press" instead of "bench").`);
     }
 
     const startDate = typeof input.start_date === "string" ? input.start_date : undefined;
@@ -267,14 +297,14 @@ export class ToolExecutor {
 
     if (typeof result === "string") return result;
 
-    return `Couldn't fetch history for "${exerciseName}" -- ${result.message}. ${result.suggestion}`;
+    throw new ToolResultError(`Couldn't fetch history for "${exerciseName}" -- ${result.message}. ${result.suggestion}`);
   }
 
   private async getRoutines(): Promise<string> {
     const result = await this.hevyClient.getRoutines();
 
     if (!Array.isArray(result)) {
-      return `Couldn't fetch routines -- ${result.message}. ${result.suggestion}`;
+      throw new ToolResultError(`Couldn't fetch routines -- ${result.message}. ${result.suggestion}`);
     }
 
     if (result.length === 0) {
@@ -294,7 +324,7 @@ export class ToolExecutor {
     const rawExercises = input.exercises as unknown[];
 
     if (!title || !rawExercises?.length) {
-      return "Need a title and at least one exercise to push a routine.";
+      throw new ToolResultError("Need a title and at least one exercise to push a routine.");
     }
 
     const exercises = parseExerciseInputs(rawExercises);
@@ -330,7 +360,7 @@ export class ToolExecutor {
         exerciseMap,
         overwriteExternalChanges,
       );
-      if (overwriteCheck) return overwriteCheck;
+      if (overwriteCheck) throw new ToolResultError(overwriteCheck, 'blocked');
       const payload: RoutinePayload = { title, exercises };
       const exerciseTemplateIds = routineTemplateIds(payload, exerciseMap);
       markHevyMutationPending("update", payload, existingRoutineId, exerciseTemplateIds);
@@ -345,7 +375,7 @@ export class ToolExecutor {
 
       if (updateResult && typeof updateResult === "object" && "error" in updateResult) {
         clearKnownFailedMutation(updateResult.message);
-        return `Couldn't update the routine in Hevy -- ${updateResult.message}. ${updateResult.suggestion}`;
+        throw new ToolResultError(`Couldn't update the routine in Hevy -- ${updateResult.message}. ${updateResult.suggestion}`);
       }
 
       confirmHevyMutation(existingRoutineId, payload, exerciseTemplateIds);
@@ -365,7 +395,7 @@ export class ToolExecutor {
 
       if ("error" in createResult) {
         clearKnownFailedMutation(createResult.message);
-        return `Couldn't create the routine in Hevy -- ${createResult.message}. ${createResult.suggestion}`;
+        throw new ToolResultError(`Couldn't create the routine in Hevy -- ${createResult.message}. ${createResult.suggestion}`);
       }
 
       confirmHevyMutation(createResult.routineId, payload, exerciseTemplateIds);
@@ -382,21 +412,21 @@ export class ToolExecutor {
     const newSets = input.sets as unknown[] | undefined;
 
     if (!replaceExercise || !withExercise) {
-      return "Need both the exercise to replace and the replacement exercise name.";
+      throw new ToolResultError("Need both the exercise to replace and the replacement exercise name.");
     }
     if (newSets && newSets.length === 0) {
-      return 'New sets cannot be empty. Omit sets to keep the existing set scheme.';
+      throw new ToolResultError('New sets cannot be empty. Omit sets to keep the existing set scheme.');
     }
 
     // Load the cached routine payload
     const payload = loadCachedRoutinePayload();
     if (!payload) {
-      return "No standing routine found to edit. Push a full routine first with hevy_push_routine.";
+      throw new ToolResultError("No standing routine found to edit. Push a full routine first with hevy_push_routine.");
     }
 
     const routineId = getConfig("routine_id");
     if (!routineId) {
-      return "No routine ID on file. Push a full routine first with hevy_push_routine.";
+      throw new ToolResultError("No routine ID on file. Push a full routine first with hevy_push_routine.");
     }
 
     // Find the exercise to replace (case-insensitive)
@@ -409,7 +439,7 @@ export class ToolExecutor {
       const exerciseNames = payload.exercises
         .map((ex) => ex.name)
         .join(", ");
-      return `Couldn't find "${replaceExercise}" in the current routine. Current exercises: ${exerciseNames}.`;
+      throw new ToolResultError(`Couldn't find "${replaceExercise}" in the current routine. Current exercises: ${exerciseNames}.`);
     }
 
     // Resolve the new exercise name to a template ID
@@ -422,7 +452,7 @@ export class ToolExecutor {
     );
 
     if (!newTemplateId) {
-      return `Couldn't find "${withExercise}" in the exercise library. Check the spelling or try the full name.`;
+      throw new ToolResultError(`Couldn't find "${withExercise}" in the exercise library. Check the spelling or try the full name.`);
     }
 
     // Ensure the new exercise is in the map for buildRoutineBody
@@ -438,7 +468,7 @@ export class ToolExecutor {
       exerciseMap,
       input.overwrite_external_changes === true,
     );
-    if (overwriteCheck) return overwriteCheck;
+    if (overwriteCheck) throw new ToolResultError(overwriteCheck, 'blocked');
 
     // Swap the exercise
     const oldExercise = payload.exercises[exerciseIndex];
@@ -464,7 +494,7 @@ export class ToolExecutor {
 
     if (updateResult && typeof updateResult === "object" && "error" in updateResult) {
       clearKnownFailedMutation(updateResult.message);
-      return `Couldn't update the routine in Hevy -- ${updateResult.message}. ${updateResult.suggestion}`;
+      throw new ToolResultError(`Couldn't update the routine in Hevy -- ${updateResult.message}. ${updateResult.suggestion}`);
     }
 
     confirmHevyMutation(routineId, payload, exerciseTemplateIds);
@@ -477,7 +507,7 @@ export class ToolExecutor {
   ): Promise<string> {
     const content = input.content as string;
     if (!content) {
-      return "Need some content to save as a note.";
+      throw new ToolResultError("Need some content to save as a note.");
     }
 
     const noteId = saveNote(content);
@@ -489,7 +519,7 @@ export class ToolExecutor {
   ): Promise<string> {
     const noteId = input.note_id as number;
     if (noteId == null) {
-      return "Need a note ID to clear.";
+      throw new ToolResultError("Need a note ID to clear.");
     }
 
     clearNote(noteId);
@@ -507,7 +537,7 @@ export class ToolExecutor {
     if (typeof input.ohp === "number") updates.ohp = input.ohp;
 
     if (Object.keys(updates).length === 0) {
-      return "No training maxes provided to update. Pass at least one of: squat, bench, deadlift, ohp.";
+      throw new ToolResultError("No training maxes provided to update. Pass at least one of: squat, bench, deadlift, ohp.");
     }
 
     setTrainingMaxes(updates);
