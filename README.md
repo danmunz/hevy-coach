@@ -102,7 +102,7 @@ After setup completes, you have three ways to run the bot. Start with the CLI to
 npm run chat
 ```
 
-Opens an interactive REPL that talks to Claude with the full tool loop — same brain as the Telegram bot, just in your terminal. Type "morning" and verify the coach responds, calls Hevy tools, and can push a routine. Useful for testing prompt changes without waiting for Telegram round-trips.
+Opens an interactive REPL that talks to Claude with the full tool loop — same brain as the Telegram bot, just in your terminal. It starts from a temporary SQLite backup, so chat history, notes, and training-max updates can be exercised without changing the production database. It can make live Hevy **read** calls, but blocks all Hevy routine writes. The temporary state is deleted when the REPL exits.
 
 ### 2. Run the Telegram bot (foreground)
 
@@ -299,14 +299,16 @@ If Claude asks for an exercise that isn't pinned, it falls back to fuzzy search 
 
 5. **Response is sanitized** (HTML tags Telegram doesn't support are stripped, special characters are escaped) and **split into chunks** (~800 chars, on paragraph boundaries) with 400ms delays between messages for natural pacing.
 
-6. **Chat history is stored** in SQLite after a successful response. Both the user message and assistant response are stored together to prevent database corruption.
+6. **Turns are serialized** for the single authorized user, so an incoming follow-up cannot race chat history or a Hevy routine update. Each turn has a 75-second end-to-end deadline; queued work that has already expired is not started, and active model or Hevy calls use the remaining budget.
+
+7. **Chat history is stored** in SQLite after a successful response. Both the user message and assistant response are stored together to prevent database corruption.
 
 ### Tools Claude can use
 
 | Tool | What it does |
 |---|---|
 | `hevy_get_recent_workouts` | Fetch and summarize recent completed workouts |
-| `hevy_get_exercise_history` | Get progression history for a specific exercise |
+| `hevy_get_exercise_history` | Get progression history for a specific exercise over the last 90 days by default, or an explicit date interval |
 | `hevy_get_routines` | List saved routines (to check for unfinished ones) |
 | `hevy_push_routine` | Create or update the standing routine in Hevy |
 | `hevy_edit_routine_exercise` | Swap one exercise in the current routine |
@@ -322,6 +324,7 @@ All persistent state lives in `data/hevy-coach.db` (SQLite, WAL mode):
 - **config** — key-value pairs (training maxes, goals). Updated by Claude via tools.
 - **notes** — coaching notes with soft-delete. Claude saves and clears these autonomously.
 - **exercise_map** — cached exercise name → Hevy template ID mappings. Populated by `npm run setup`.
+- **pending_hevy_mutation** — a routine write whose remote result is unknown. It blocks later routine writes until you inspect and resolve the outcome.
 
 To reset everything and start fresh, delete `data/hevy-coach.db` and re-run `npm run setup`.
 
@@ -342,6 +345,26 @@ Check `config/program.md` — that's where the set/rep schemes and percentage ca
 
 **Routine doesn't appear in Hevy**
 Check that your Hevy API key has write access (Pro subscription). Look at the pm2 logs for `[tool]` lines showing what was sent to the API.
+
+**The coach says a previous routine write has an unknown outcome**
+Do not resend the workout immediately. Check the standing routine in Hevy first: an interrupted request may have completed remotely. The bot blocks a second routine write to avoid creating a duplicate or overwriting an unknown result. Clear the pending record only after reconciling the intended routine with what is in Hevy.
+
+To reconcile a pending update, the recovery command fetches the routine again
+and clears the block only when its programming fields match the pending payload:
+
+```bash
+npm run recover:hevy
+```
+
+For an interrupted create, first find the candidate routine's ID in Hevy, then
+provide it explicitly:
+
+```bash
+npm run recover:hevy -- --routine-id <id>
+```
+
+The command makes a single read request. It never retries the interrupted write
+and leaves the safety block in place if the remote routine does not match.
 
 **"Something went wrong" on Telegram**
 Usually an HTML parsing error. Check pm2 error logs. The bot tries to fall back to plain text, but edge cases can slip through.

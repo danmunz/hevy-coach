@@ -22,8 +22,8 @@ pick up where the rotation left off — don't skip ahead.
 - Week 2 (3s): 70% x3, 80% x3, 90% x3
 - Week 3 (1s): 75% x5, 85% x3, 95% x1
 
-Running 5s PRO during the cut — no AMRAP sets. All work sets 
-are straight sets at the prescribed reps. This is a deliberate 
+Running prescribed straight sets during the cut — no AMRAP sets by default. All work sets
+use the reps shown above. This is a deliberate
 choice: grinding reps in a caloric deficit increases injury risk 
 and recovery cost without meaningful benefit. If the user is 
 feeling great on a given day, coach.md adjustment logic can 

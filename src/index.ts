@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { Telegraf } from 'telegraf';
 
 import { chat } from './claude/client.js';
+import { TurnDeadlineError, TurnExpiredError, TurnQueue } from './claude/turn-queue.js';
 import { sanitizeHtml, sendSplitMessages } from './telegram/client.js';
 
 // ---------------------------------------------------------------------------
@@ -41,6 +42,7 @@ if (missing.length > 0) {
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!);
 const AUTHORIZED_CHAT_ID = process.env.AUTHORIZED_CHAT_ID!;
+const turnQueue = new TurnQueue();
 
 // ---------------------------------------------------------------------------
 // Bot-level error handler
@@ -60,8 +62,10 @@ bot.on('text', async (ctx) => {
     return;
   }
 
-  // Show initial typing indicator
-  await ctx.replyWithChatAction('typing');
+  // Receipt and progress indicators are best effort. A Telegram status error
+  // must never prevent the queued coaching turn from running.
+  await ctx.replyWithChatAction('typing').catch(() => undefined);
+  await ctx.react('👀').catch(() => undefined);
 
   // Keep typing indicator alive while Claude is thinking (expires after ~5s)
   const typingInterval = setInterval(async () => {
@@ -73,7 +77,17 @@ bot.on('text', async (ctx) => {
   }, 4000);
 
   try {
-    const response = await chat(ctx.message.text);
+    const response = await turnQueue.run(async (turn) => {
+      console.log(`[turn] queue_ms=${turn.queueWaitMs} budget_ms=${turn.deadlineAt - turn.startedAt}`);
+      return chat(ctx.message.text, {
+        deadlineAt: turn.deadlineAt,
+        onProgress: (stage) => {
+          console.log(`[turn] stage=${stage}`);
+          const reaction = stage === 'running_tools' ? '⚡' : stage === 'calling_model' ? '✍' : undefined;
+          if (reaction) void ctx.react(reaction).catch(() => undefined);
+        },
+      });
+    });
     clearInterval(typingInterval);
 
     const sanitized = sanitizeHtml(response);
@@ -83,12 +97,17 @@ bot.on('text', async (ctx) => {
     } else {
       await sendSplitMessages(ctx, sanitized);
     }
+    await ctx.react().catch(() => undefined);
   } catch (error) {
     clearInterval(typingInterval);
     console.error('[telegram] Error processing message:', error);
 
     try {
-      await ctx.reply('Something went wrong. Try again in a moment.');
+      await ctx.reply(
+        error instanceof TurnExpiredError || error instanceof TurnDeadlineError
+          ? error.message
+          : 'Something went wrong. Try again in a moment.',
+      );
     } catch {
       // If even the error message fails to send, just log it
       console.error('[telegram] Failed to send error message to user');

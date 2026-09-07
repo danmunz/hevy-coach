@@ -1,9 +1,10 @@
-import type { HevyClient } from "../hevy/client.js";
+import { buildRoutineSnapshot, routineSnapshotsMatch, type HevyClient } from "../hevy/client.js";
 import type { RoutineExercisePayload, RoutinePayload } from "../hevy/types.js";
 import { resolveExerciseName } from "../hevy/exercise-pins.js";
-import { getConfig, setConfig, getTrainingMaxes, setTrainingMaxes } from "../state/config.js";
+import { getConfig, getTrainingMaxes, setTrainingMaxes } from "../state/config.js";
 import { saveNote, clearNote } from "../state/notes.js";
 import { getDb } from "../state/db.js";
+import { clearPendingHevyMutation, confirmHevyMutation, getPendingHevyMutation, markHevyMutationPending } from "../state/routine-state.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -34,10 +35,101 @@ function makeSearchFn(client: HevyClient) {
   return (query: string) => client.searchExerciseTemplates(query);
 }
 
+/** A 4xx response or local payload error proves the write was not ambiguous. */
+function clearKnownFailedMutation(message: string): void {
+  if (/Hevy API 4\d\d/.test(message) || message.includes('No template ID found')) {
+    clearPendingHevyMutation();
+  }
+}
+
+function ensureRoutineExercisesResolve(
+  exercises: RoutineExercisePayload[],
+  exerciseMap: Map<string, string>,
+): void {
+  for (const exercise of exercises) {
+    if (!exerciseMap.has(exercise.name.trim().toLowerCase())) {
+      throw new Error(`No template ID found for exercise "${exercise.name}".`);
+    }
+  }
+}
+
+function routineTemplateIds(
+  payload: RoutinePayload,
+  exerciseMap: Map<string, string>,
+): Record<string, string> {
+  return Object.fromEntries(payload.exercises.map((exercise) => {
+    const templateId = exerciseMap.get(exercise.name.trim().toLowerCase());
+    if (!templateId) throw new Error(`No template ID found for exercise "${exercise.name}".`);
+    return [exercise.name, templateId];
+  }));
+}
+
+function loadCachedRoutinePayload(): RoutinePayload | undefined {
+  const payloadRaw = getConfig("last_routine_payload");
+  if (!payloadRaw) return undefined;
+  try {
+    return JSON.parse(payloadRaw) as RoutinePayload;
+  } catch {
+    throw new Error("The cached routine payload is corrupted. Push a fresh routine with hevy_push_routine.");
+  }
+}
+
+async function ensureRemoteRoutineCanBeOverwritten(
+  client: HevyClient,
+  routineId: string,
+  cachedPayload: RoutinePayload | undefined,
+  exerciseMap: Map<string, string>,
+  overwriteExternalChanges: boolean,
+): Promise<string | undefined> {
+  if (overwriteExternalChanges) return undefined;
+  if (!cachedPayload) {
+    return 'The local copy of this routine is missing, so I cannot safely check for changes made in Hevy. Ask the user to explicitly confirm replacing the current Hevy routine, then retry with overwrite_external_changes: true.';
+  }
+
+  const expected = buildRoutineSnapshot(
+    cachedPayload.title,
+    cachedPayload.exercises,
+    exerciseMap,
+  );
+  const remote = await client.getRoutineSnapshot(routineId);
+  if ("error" in remote) {
+    return `I could not check the current Hevy routine before overwriting it: ${remote.message} ${remote.suggestion}`;
+  }
+  if (!routineSnapshotsMatch(expected, remote)) {
+    return 'The standing routine has changed in Hevy since the bot last confirmed it. Ask the user whether to replace those external changes. Only after explicit confirmation, retry with overwrite_external_changes: true.';
+  }
+  return undefined;
+}
+
 /**
  * Converts tool-input exercise objects into RoutineExercisePayload[].
  */
-function parseExerciseInputs(
+const MAX_REPEAT_COUNT = 20;
+const MAX_SETS_PER_EXERCISE = 40;
+
+export function parseSetInputs(rawSets: unknown[], exerciseName: string): RoutineExercisePayload["sets"] {
+  const expanded: RoutineExercisePayload["sets"] = [];
+  for (const [index, rawSet] of rawSets.entries()) {
+    if (!rawSet || typeof rawSet !== "object") throw new Error(`Set ${index + 1} for "${exerciseName}" must be an object.`);
+    const set = rawSet as Record<string, unknown>;
+    const weightLbs = set.weight_lbs;
+    const reps = set.reps;
+    const count = set.count ?? 1;
+    if (typeof weightLbs !== "number" || !Number.isFinite(weightLbs) || weightLbs < 0) throw new Error(`Set ${index + 1} for "${exerciseName}" needs a nonnegative finite weight_lbs.`);
+    if (typeof reps !== "number" || !Number.isInteger(reps) || reps <= 0) throw new Error(`Set ${index + 1} for "${exerciseName}" needs a positive integer reps.`);
+    if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > MAX_REPEAT_COUNT) throw new Error(`Set ${index + 1} for "${exerciseName}" needs count from 1 to ${MAX_REPEAT_COUNT}.`);
+    const legacyType = set.type;
+    if (legacyType !== undefined && legacyType !== "normal" && legacyType !== "warmup") throw new Error(`Set ${index + 1} for "${exerciseName}" has an unsupported type.`);
+    if (set.warmup !== undefined && typeof set.warmup !== "boolean") throw new Error(`Set ${index + 1} for "${exerciseName}" has a non-boolean warmup flag.`);
+    if (legacyType !== undefined && set.warmup !== undefined && (legacyType === "warmup") !== set.warmup) throw new Error(`Set ${index + 1} for "${exerciseName}" has conflicting type and warmup fields.`);
+    const type = set.warmup === true || legacyType === "warmup" ? "warmup" : "normal";
+    for (let repeat = 0; repeat < count; repeat++) expanded.push({ type, weightLbs, reps });
+    if (expanded.length > MAX_SETS_PER_EXERCISE) throw new Error(`"${exerciseName}" exceeds the ${MAX_SETS_PER_EXERCISE}-set safety limit.`);
+  }
+  return expanded;
+}
+
+export function parseExerciseInputs(
   exercises: unknown[],
 ): RoutineExercisePayload[] {
   return exercises.map((ex, i) => {
@@ -48,14 +140,7 @@ function parseExerciseInputs(
     if (!Array.isArray(e.sets) || e.sets.length === 0) {
       throw new Error(`Exercise "${e.name}" has no sets.`);
     }
-    const sets = e.sets.map((s) => {
-      const set = s as Record<string, unknown>;
-      return {
-        type: (set.type as "normal" | "warmup") ?? "normal",
-        weightLbs: typeof set.weight_lbs === "number" ? set.weight_lbs : 0,
-        reps: typeof set.reps === "number" ? set.reps : 0,
-      };
-    });
+    const sets = parseSetInputs(e.sets, e.name);
     return {
       name: e.name,
       supersetId: typeof e.superset_id === "number" ? e.superset_id : undefined,
@@ -83,7 +168,10 @@ export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 export class ToolExecutor {
-  constructor(private hevyClient: HevyClient) {}
+  constructor(
+    private hevyClient: HevyClient,
+    private readonly options: { allowMutations?: boolean; allowHevyWrites?: boolean } = {},
+  ) {}
 
   /**
    * Dispatches a tool call to the appropriate handler and returns the
@@ -97,6 +185,18 @@ export class ToolExecutor {
     toolInput: Record<string, unknown>,
   ): Promise<string> {
     try {
+      if (!READ_ONLY_TOOLS.has(toolName) && this.options.allowMutations === false) {
+        return `Demo mode blocked ${toolName}. Reads are live, but notes, training maxes, and Hevy writes are disabled.`;
+      }
+      if (
+        (toolName === "hevy_push_routine" || toolName === "hevy_edit_routine_exercise") &&
+        this.options.allowHevyWrites === false
+      ) {
+        return `Demo mode blocked ${toolName}. It can update scratch coaching state, but never changes a live Hevy routine.`;
+      }
+      if ((toolName === "hevy_push_routine" || toolName === "hevy_edit_routine_exercise") && getPendingHevyMutation()) {
+        return 'A previous Hevy routine write has an unknown outcome. Check Hevy and resolve that write before changing the routine again.';
+      }
       // Keep READ_ONLY_TOOLS in sync with the cases below when adding a tool.
       switch (toolName) {
         case "hevy_get_recent_workouts":
@@ -161,7 +261,9 @@ export class ToolExecutor {
       return `Couldn't find "${exerciseName}" in the exercise library. Check the spelling or try the full name (e.g. "Bench Press" instead of "bench").`;
     }
 
-    const result = await this.hevyClient.getExerciseHistory(templateId);
+    const startDate = typeof input.start_date === "string" ? input.start_date : undefined;
+    const endDate = typeof input.end_date === "string" ? input.end_date : undefined;
+    const result = await this.hevyClient.getExerciseHistory(templateId, { startDate, endDate, exerciseName });
 
     if (typeof result === "string") return result;
 
@@ -215,10 +317,24 @@ export class ToolExecutor {
         // throw with a clear message about the missing exercise.
       }
     }
+    ensureRoutineExercisesResolve(exercises, exerciseMap);
 
     const existingRoutineId = getConfig("routine_id");
+    const overwriteExternalChanges = input.overwrite_external_changes === true;
 
     if (existingRoutineId) {
+      const overwriteCheck = await ensureRemoteRoutineCanBeOverwritten(
+        this.hevyClient,
+        existingRoutineId,
+        loadCachedRoutinePayload(),
+        exerciseMap,
+        overwriteExternalChanges,
+      );
+      if (overwriteCheck) return overwriteCheck;
+      const payload: RoutinePayload = { title, exercises };
+      const exerciseTemplateIds = routineTemplateIds(payload, exerciseMap);
+      markHevyMutationPending("update", payload, existingRoutineId, exerciseTemplateIds);
+
       // Update existing routine
       const updateResult = await this.hevyClient.updateRoutine(
         existingRoutineId,
@@ -228,15 +344,18 @@ export class ToolExecutor {
       );
 
       if (updateResult && typeof updateResult === "object" && "error" in updateResult) {
+        clearKnownFailedMutation(updateResult.message);
         return `Couldn't update the routine in Hevy -- ${updateResult.message}. ${updateResult.suggestion}`;
       }
 
-      // Store the full payload for quick edits
-      const payload: RoutinePayload = { title, exercises };
-      setConfig("last_routine_payload", JSON.stringify(payload));
+      confirmHevyMutation(existingRoutineId, payload, exerciseTemplateIds);
 
       return `Routine updated in Hevy: "${title}". Open the Hevy app to start the workout.`;
     } else {
+      const payload: RoutinePayload = { title, exercises };
+      const exerciseTemplateIds = routineTemplateIds(payload, exerciseMap);
+      markHevyMutationPending("create", payload, undefined, exerciseTemplateIds);
+
       // Create new routine
       const createResult = await this.hevyClient.createRoutine(
         title,
@@ -245,15 +364,11 @@ export class ToolExecutor {
       );
 
       if ("error" in createResult) {
+        clearKnownFailedMutation(createResult.message);
         return `Couldn't create the routine in Hevy -- ${createResult.message}. ${createResult.suggestion}`;
       }
 
-      // Store the routine ID for future updates
-      setConfig("routine_id", createResult.routineId);
-
-      // Store the full payload for quick edits
-      const payload: RoutinePayload = { title, exercises };
-      setConfig("last_routine_payload", JSON.stringify(payload));
+      confirmHevyMutation(createResult.routineId, payload, exerciseTemplateIds);
 
       return `Routine created in Hevy: "${title}". Open the Hevy app to start the workout.`;
     }
@@ -269,23 +384,19 @@ export class ToolExecutor {
     if (!replaceExercise || !withExercise) {
       return "Need both the exercise to replace and the replacement exercise name.";
     }
+    if (newSets && newSets.length === 0) {
+      return 'New sets cannot be empty. Omit sets to keep the existing set scheme.';
+    }
 
     // Load the cached routine payload
-    const payloadRaw = getConfig("last_routine_payload");
-    if (!payloadRaw) {
+    const payload = loadCachedRoutinePayload();
+    if (!payload) {
       return "No standing routine found to edit. Push a full routine first with hevy_push_routine.";
     }
 
     const routineId = getConfig("routine_id");
     if (!routineId) {
       return "No routine ID on file. Push a full routine first with hevy_push_routine.";
-    }
-
-    let payload: RoutinePayload;
-    try {
-      payload = JSON.parse(payloadRaw) as RoutinePayload;
-    } catch {
-      return "The cached routine payload is corrupted. Push a fresh routine with hevy_push_routine.";
     }
 
     // Find the exercise to replace (case-insensitive)
@@ -320,24 +431,28 @@ export class ToolExecutor {
       exerciseMap.set(newNormalized, newTemplateId);
     }
 
+    const overwriteCheck = await ensureRemoteRoutineCanBeOverwritten(
+      this.hevyClient,
+      routineId,
+      payload,
+      exerciseMap,
+      input.overwrite_external_changes === true,
+    );
+    if (overwriteCheck) return overwriteCheck;
+
     // Swap the exercise
     const oldExercise = payload.exercises[exerciseIndex];
     const replacement: RoutineExercisePayload = {
       name: withExercise,
       supersetId: oldExercise.supersetId,
-      sets: newSets
-        ? (newSets.map((s) => {
-            const set = s as Record<string, unknown>;
-            return {
-              type: (set.type as "normal" | "warmup") ?? "normal",
-              weightLbs: (set.weight_lbs as number) ?? 0,
-              reps: (set.reps as number) ?? 0,
-            };
-          }))
-        : oldExercise.sets,
+      sets: newSets ? parseSetInputs(newSets, withExercise) : oldExercise.sets,
     };
 
     payload.exercises[exerciseIndex] = replacement;
+    ensureRoutineExercisesResolve(payload.exercises, exerciseMap);
+    const exerciseTemplateIds = routineTemplateIds(payload, exerciseMap);
+
+    markHevyMutationPending("update", payload, routineId, exerciseTemplateIds);
 
     // Push the updated routine
     const updateResult = await this.hevyClient.updateRoutine(
@@ -348,11 +463,11 @@ export class ToolExecutor {
     );
 
     if (updateResult && typeof updateResult === "object" && "error" in updateResult) {
+      clearKnownFailedMutation(updateResult.message);
       return `Couldn't update the routine in Hevy -- ${updateResult.message}. ${updateResult.suggestion}`;
     }
 
-    // Update the cached payload
-    setConfig("last_routine_payload", JSON.stringify(payload));
+    confirmHevyMutation(routineId, payload, exerciseTemplateIds);
 
     return `Swapped "${replaceExercise}" for "${withExercise}" in the routine. Updated in Hevy.`;
   }

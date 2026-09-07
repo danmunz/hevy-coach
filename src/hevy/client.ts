@@ -3,7 +3,9 @@ import type {
   HevyCompletedWorkoutExercise,
   HevyCompletedWorkoutPage,
   HevyCompletedWorkoutSet,
+  HevyExerciseHistoryEntry,
   HevyRoutineRecord,
+  HevyRoutineSnapshot,
   HevyTemplateMatch,
   RoutineExercisePayload,
 } from "./types.js";
@@ -145,6 +147,28 @@ function normalizeWorkout(item: unknown): HevyCompletedWorkout | undefined {
   };
 }
 
+function normalizeExerciseHistoryEntry(item: unknown): HevyExerciseHistoryEntry | undefined {
+  if (!item || typeof item !== "object") return undefined;
+  const r = item as Record<string, unknown>;
+  const workoutId = typeof r.workout_id === "string" ? r.workout_id : r.workoutId;
+  const templateId = typeof r.exercise_template_id === "string" ? r.exercise_template_id : r.exerciseTemplateId;
+  if (typeof workoutId !== "string" || typeof templateId !== "string") return undefined;
+  return {
+    workoutId,
+    workoutTitle: typeof r.workout_title === "string" ? r.workout_title : typeof r.workoutTitle === "string" ? r.workoutTitle : undefined,
+    workoutStartTime: typeof r.workout_start_time === "string" ? r.workout_start_time : typeof r.workoutStartTime === "string" ? r.workoutStartTime : undefined,
+    workoutEndTime: typeof r.workout_end_time === "string" ? r.workout_end_time : typeof r.workoutEndTime === "string" ? r.workoutEndTime : undefined,
+    exerciseTemplateId: templateId,
+    weightKg: typeof r.weight_kg === "number" ? r.weight_kg : typeof r.weightKg === "number" ? r.weightKg : null,
+    reps: typeof r.reps === "number" ? r.reps : null,
+    distanceMeters: typeof r.distance_meters === "number" ? r.distance_meters : typeof r.distanceMeters === "number" ? r.distanceMeters : null,
+    durationSeconds: typeof r.duration_seconds === "number" ? r.duration_seconds : typeof r.durationSeconds === "number" ? r.durationSeconds : null,
+    rpe: typeof r.rpe === "number" ? r.rpe : null,
+    customMetric: typeof r.custom_metric === "number" ? r.custom_metric : typeof r.customMetric === "number" ? r.customMetric : null,
+    setType: typeof r.set_type === "string" ? r.set_type : typeof r.setType === "string" ? r.setType : undefined,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Structured error type
 // ---------------------------------------------------------------------------
@@ -168,7 +192,7 @@ export class HevyClient {
   private templateCache: HevyTemplateMatch[] | null = null;
   private templatePromise: Promise<HevyTemplateMatch[]> | null = null;
 
-  constructor(apiKey?: string) {
+  constructor(apiKey?: string, private readonly deadlineAt?: number) {
     this.apiKey = apiKey ?? process.env.HEVY_API_KEY ?? "";
     if (!this.apiKey) {
       console.warn("[hevy] No API key configured. Set HEVY_API_KEY in .env.");
@@ -191,10 +215,21 @@ export class HevyClient {
     };
 
     let lastError: Error | undefined;
+    const method = (options?.method ?? "GET").toUpperCase();
+    // A connection failure after POST/PUT can occur after Hevy accepted the
+    // write. Retrying would duplicate or overwrite a routine, so only reads
+    // are retried automatically.
+    const canRetry = method === "GET" || method === "HEAD";
 
     for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15_000);
+      const remainingMs = this.deadlineAt == null
+        ? 15_000
+        : this.deadlineAt - Date.now();
+      if (remainingMs <= 0) {
+        throw new Error("Hevy request exceeded the turn deadline.");
+      }
+      const timeoutId = setTimeout(() => controller.abort(), Math.min(15_000, remainingMs));
       try {
         const response = await fetch(url, {
           ...options,
@@ -204,7 +239,7 @@ export class HevyClient {
 
         // Handle rate limiting (429)
         if (response.status === 429) {
-          if (attempt < RETRY_CONFIG.maxRetries) {
+          if (canRetry && attempt < RETRY_CONFIG.maxRetries) {
             let waitMs = RETRY_CONFIG.backoffMs;
             if (RETRY_CONFIG.honorRetryAfter) {
               const retryAfter = response.headers.get("retry-after");
@@ -215,18 +250,18 @@ export class HevyClient {
                 }
               }
             }
-            await sleep(waitMs);
+            await this.waitForRetry(waitMs);
             continue;
           }
           throw new Error(
-            `Rate limited (429) after ${attempt + 1} attempts on ${path}`,
+            `Hevy API 429 on ${path}: rate limited after ${attempt + 1} attempts`,
           );
         }
 
         // Handle retryable server errors
         if (RETRY_CONFIG.retryOn.includes(response.status)) {
-          if (attempt < RETRY_CONFIG.maxRetries) {
-            await sleep(RETRY_CONFIG.backoffMs * (attempt + 1));
+          if (canRetry && attempt < RETRY_CONFIG.maxRetries) {
+            await this.waitForRetry(RETRY_CONFIG.backoffMs * (attempt + 1));
             continue;
           }
           throw new Error(
@@ -248,10 +283,11 @@ export class HevyClient {
 
         // Network errors and timeouts are retryable
         if (
-          attempt < RETRY_CONFIG.maxRetries &&
-          !(lastError.message.includes("Hevy API"))
+          canRetry && attempt < RETRY_CONFIG.maxRetries &&
+          !(lastError.message.includes("Hevy API")) &&
+          !(lastError.message.includes("turn deadline"))
         ) {
-          await sleep(RETRY_CONFIG.backoffMs * (attempt + 1));
+          await this.waitForRetry(RETRY_CONFIG.backoffMs * (attempt + 1));
           continue;
         }
 
@@ -262,6 +298,13 @@ export class HevyClient {
     }
 
     throw lastError ?? new Error(`fetchJson failed for ${path}`);
+  }
+
+  private async waitForRetry(waitMs: number): Promise<void> {
+    if (this.deadlineAt != null && waitMs >= this.deadlineAt - Date.now()) {
+      throw new Error("Hevy retry would exceed the turn deadline.");
+    }
+    await sleep(waitMs);
   }
 
   // -------------------------------------------------------------------------
@@ -338,57 +381,22 @@ export class HevyClient {
    */
   async getExerciseHistory(
     templateId: string,
+    options?: { startDate?: string; endDate?: string; exerciseName?: string },
   ): Promise<string | HevyApiError> {
     try {
-      const workouts: HevyCompletedWorkout[] = [];
-      let page = 1;
-      const pageSize = 10;
-      const maxPages = 5; // Look back through up to 50 workouts
-      let exerciseName = "";
-
-      while (page <= maxPages) {
-        const payload = await this.fetchJson<Record<string, unknown>>(
-          `/workouts?page=${page}&pageSize=${pageSize}`,
-        );
-
-        const rawWorkouts = Array.isArray(payload.workouts)
-          ? payload.workouts
-          : [];
-        const normalized = rawWorkouts
-          .map(normalizeWorkout)
-          .filter((w): w is HevyCompletedWorkout => w != null);
-
-        if (normalized.length === 0) break;
-
-        // Filter workouts to those containing the target exercise
-        for (const workout of normalized) {
-          const matchingExercise = workout.exercises.find(
-            (ex) => ex.exerciseTemplateId === templateId,
-          );
-          if (matchingExercise) {
-            workouts.push(workout);
-            if (!exerciseName) {
-              exerciseName = matchingExercise.title;
-            }
-          }
-        }
-
-        const pageCount =
-          typeof payload.page_count === "number"
-            ? payload.page_count
-            : typeof (payload as Record<string, unknown>).pageCount === "number"
-              ? (payload as Record<string, unknown>).pageCount as number
-              : page;
-
-        if (page >= pageCount) break;
-        page++;
-      }
-
-      if (!exerciseName) {
-        return `No workout history found for exercise template "${templateId}".`;
-      }
-
-      return summarizeExerciseHistory(workouts, exerciseName);
+      const endDate = options?.endDate ?? new Date().toISOString();
+      const startDate = options?.startDate ?? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      const query = new URLSearchParams({ start_date: startDate, end_date: endDate });
+      const payload = await this.fetchJson<Record<string, unknown>>(
+        `/exercise_history/${encodeURIComponent(templateId)}?${query.toString()}`,
+      );
+      const rawEntries = Array.isArray(payload.exercise_history)
+        ? payload.exercise_history
+        : Array.isArray(payload.exerciseHistory) ? payload.exerciseHistory : [];
+      const entries = rawEntries
+        .map(normalizeExerciseHistoryEntry)
+        .filter((entry): entry is HevyExerciseHistoryEntry => entry != null);
+      return summarizeExerciseHistory(entries, options?.exerciseName ?? templateId, { startDate, endDate });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return apiError(
@@ -453,6 +461,34 @@ export class HevyClient {
       return apiError(
         `Failed to fetch routines: ${msg}`,
         "Check that HEVY_API_KEY is set and valid.",
+      );
+    }
+  }
+
+  /**
+   * Fetches only the programming fields needed before an overwrite and during
+   * recovery from a write whose outcome is unknown.
+   */
+  async getRoutineSnapshot(
+    routineId: string,
+  ): Promise<HevyRoutineSnapshot | HevyApiError> {
+    try {
+      const payload = await this.fetchJson<Record<string, unknown>>(
+        `/routines/${encodeURIComponent(routineId)}`,
+      );
+      const snapshot = normalizeRoutineSnapshot(payload.routine ?? payload);
+      if (!snapshot) {
+        return apiError(
+          `Routine "${routineId}" returned an unexpected shape.`,
+          "Check the routine in Hevy before attempting another write.",
+        );
+      }
+      return snapshot;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return apiError(
+        `Failed to fetch routine "${routineId}": ${msg}`,
+        "Check the routine in Hevy before attempting another write.",
       );
     }
   }
@@ -642,12 +678,14 @@ export class HevyClient {
  * Builds the JSON body for a routine create/update request.
  * Resolves display names to template IDs and converts lbs to kg.
  */
-function buildRoutineBody(
+export function buildRoutineSnapshot(
   title: string,
   exercises: RoutineExercisePayload[],
   exerciseMap: Map<string, string>,
-): Record<string, unknown> {
-  const routineExercises = exercises.map((ex) => {
+): HevyRoutineSnapshot {
+  return {
+    title,
+    exercises: exercises.map((ex) => {
     const normalizedName = ex.name.trim().toLowerCase();
     const templateId = exerciseMap.get(normalizedName);
 
@@ -659,20 +697,73 @@ function buildRoutineBody(
     }
 
     return {
-      exercise_template_id: templateId,
-      superset_id: ex.supersetId ?? null,
+      exerciseTemplateId: templateId,
+      supersetId: ex.supersetId ?? null,
       sets: ex.sets.map((set) => ({
         type: set.type,
-        weight_kg: poundsToRoundedKilograms(set.weightLbs),
+        weightKg: poundsToRoundedKilograms(set.weightLbs),
         reps: set.reps,
       })),
     };
-  });
+    }),
+  };
+}
 
+export function routineSnapshotsMatch(
+  first: HevyRoutineSnapshot,
+  second: HevyRoutineSnapshot,
+): boolean {
+  return JSON.stringify(first) === JSON.stringify(second);
+}
+
+function buildRoutineBody(
+  title: string,
+  exercises: RoutineExercisePayload[],
+  exerciseMap: Map<string, string>,
+): Record<string, unknown> {
+  const snapshot = buildRoutineSnapshot(title, exercises, exerciseMap);
   return {
     routine: {
-      title,
-      exercises: routineExercises,
+      title: snapshot.title,
+      exercises: snapshot.exercises.map((exercise) => ({
+        exercise_template_id: exercise.exerciseTemplateId,
+        superset_id: exercise.supersetId,
+        sets: exercise.sets.map((set) => ({
+          type: set.type,
+          weight_kg: set.weightKg,
+          reps: set.reps,
+        })),
+      })),
     },
   };
+}
+
+function normalizeRoutineSnapshot(value: unknown): HevyRoutineSnapshot | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const routine = value as Record<string, unknown>;
+  if (typeof routine.title !== "string" || !Array.isArray(routine.exercises)) return undefined;
+
+  const exercises: HevyRoutineSnapshot["exercises"] = [];
+  for (const rawExercise of routine.exercises) {
+    if (!rawExercise || typeof rawExercise !== "object") return undefined;
+    const exercise = rawExercise as Record<string, unknown>;
+    const exerciseTemplateId = typeof exercise.exercise_template_id === "string"
+      ? exercise.exercise_template_id
+      : exercise.exerciseTemplateId;
+    const supersetId = typeof exercise.superset_id === "number"
+      ? exercise.superset_id
+      : typeof exercise.supersetId === "number" ? exercise.supersetId : null;
+    if (typeof exerciseTemplateId !== "string" || !Array.isArray(exercise.sets)) return undefined;
+
+    const sets: HevyRoutineSnapshot["exercises"][number]["sets"] = [];
+    for (const rawSet of exercise.sets) {
+      if (!rawSet || typeof rawSet !== "object") return undefined;
+      const set = rawSet as Record<string, unknown>;
+      const weightKg = typeof set.weight_kg === "number" ? set.weight_kg : set.weightKg;
+      if (typeof set.type !== "string" || typeof weightKg !== "number" || typeof set.reps !== "number") return undefined;
+      sets.push({ type: set.type, weightKg, reps: set.reps });
+    }
+    exercises.push({ exerciseTemplateId, supersetId, sets });
+  }
+  return { title: routine.title, exercises };
 }

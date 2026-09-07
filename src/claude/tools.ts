@@ -19,7 +19,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'hevy_get_exercise_history',
     description:
-      "Get the user's performance history for a specific exercise. Useful for checking progression over time. Use exercise display name (e.g., 'Bench Press').",
+      "Get the user's performance history for a specific exercise. Useful for checking progression over time. Use exercise display name (e.g., 'Bench Press'). It defaults to the last 90 days; pass dates only when the user needs a specific period.",
     input_schema: {
       type: 'object',
       properties: {
@@ -27,6 +27,8 @@ export const TOOLS: Anthropic.Tool[] = [
           type: 'string',
           description: "Exercise display name, e.g. 'Squat', 'Bench Press'",
         },
+        start_date: { type: 'string', description: 'Optional ISO 8601 start date.' },
+        end_date: { type: 'string', description: 'Optional ISO 8601 end date.' },
       },
       required: ['exercise_name'],
     },
@@ -68,18 +70,18 @@ export const TOOLS: Anthropic.Tool[] = [
               },
               sets: {
                 type: 'array',
+                description: 'One entry per distinct consecutive set. Use count for repeated identical sets; use warmup: true for warmups.',
                 items: {
                   type: 'object',
                   properties: {
-                    type: {
-                      type: 'string',
-                      enum: ['normal', 'warmup'],
-                    },
                     weight_lbs: {
                       type: 'number',
                       description: 'Weight in pounds',
                     },
                     reps: { type: 'number' },
+                    count: { type: 'number', description: 'Identical repetitions, default 1, maximum 20.' },
+                    warmup: { type: 'boolean', description: 'True only for warmup sets.' },
+                    type: { type: 'string', enum: ['normal', 'warmup'], description: 'Legacy form; omit for new calls.' },
                   },
                   required: ['weight_lbs', 'reps'],
                 },
@@ -87,6 +89,10 @@ export const TOOLS: Anthropic.Tool[] = [
             },
             required: ['name', 'sets'],
           },
+        },
+        overwrite_external_changes: {
+          type: 'boolean',
+          description: 'Set true only after the user explicitly confirms replacing changes currently present in Hevy.',
         },
       },
       required: ['title', 'exercises'],
@@ -114,15 +120,18 @@ export const TOOLS: Anthropic.Tool[] = [
           items: {
             type: 'object',
             properties: {
-              type: {
-                type: 'string',
-                enum: ['normal', 'warmup'],
-              },
               weight_lbs: { type: 'number' },
               reps: { type: 'number' },
+              count: { type: 'number', description: 'Identical repetitions, default 1, maximum 20.' },
+              warmup: { type: 'boolean', description: 'True only for warmup sets.' },
+              type: { type: 'string', enum: ['normal', 'warmup'], description: 'Legacy form; omit for new calls.' },
             },
             required: ['weight_lbs', 'reps'],
           },
+        },
+        overwrite_external_changes: {
+          type: 'boolean',
+          description: 'Set true only after the user explicitly confirms replacing changes currently present in Hevy.',
         },
       },
       required: ['replace_exercise', 'with_exercise'],

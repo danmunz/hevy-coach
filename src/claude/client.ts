@@ -5,6 +5,7 @@ import { TOOLS } from './tools.js';
 import { READ_ONLY_TOOLS, ToolExecutor } from './tool-executor.js';
 import { HevyClient } from '../hevy/client.js';
 import { addMessage } from '../state/chatlog.js';
+import { TurnDeadlineError } from './turn-queue.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -49,6 +50,26 @@ const anthropic = new Anthropic();
 const hevyClient = new HevyClient();
 const toolExecutor = new ToolExecutor(hevyClient);
 
+export type ChatProgressStage = 'calling_model' | 'running_tools' | 'complete';
+
+export interface ChatOptions {
+  /** Default true. Set false for a fully read-only conversation. */
+  persist?: boolean;
+  /** Default true. Set false to disable every state-changing tool. */
+  allowMutations?: boolean;
+  /** Default true. The CLI disables only live Hevy routine writes. */
+  allowHevyWrites?: boolean;
+  /** Absolute deadline supplied by the Telegram turn queue. */
+  deadlineAt?: number;
+  onProgress?: (stage: ChatProgressStage) => void;
+}
+
+function throwIfDeadlineExpired(deadlineAt: number | undefined): void {
+  if (deadlineAt != null && Date.now() >= deadlineAt) {
+    throw new TurnDeadlineError();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Chat
 // ---------------------------------------------------------------------------
@@ -62,7 +83,17 @@ const toolExecutor = new ToolExecutor(hevyClient);
  * 4. Store BOTH user and assistant messages after success
  * 5. Return the assistant's response
  */
-export async function chat(userMessage: string): Promise<string> {
+export async function chat(userMessage: string, options: ChatOptions = {}): Promise<string> {
+  const persist = options.persist ?? true;
+  const activeHevyClient = options.deadlineAt == null
+    ? hevyClient
+    : new HevyClient(undefined, options.deadlineAt);
+  const executor = options.allowMutations === false || options.allowHevyWrites === false || options.deadlineAt != null
+    ? new ToolExecutor(activeHevyClient, {
+      allowMutations: options.allowMutations,
+      allowHevyWrites: options.allowHevyWrites,
+    })
+    : toolExecutor;
   // 1. Assemble context (before storing the user message — CRIT-001 fix)
   const systemPrompt = assembleSystemPrompt();
   const chatHistory = loadChatHistory();
@@ -90,15 +121,34 @@ export async function chat(userMessage: string): Promise<string> {
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations++;
 
+    throwIfDeadlineExpired(options.deadlineAt);
+    options.onProgress?.('calling_model');
     console.log(`[claude] Calling model=${model} messages=${messages.length} iteration=${iterations}`);
     const iterationStart = Date.now();
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      system: systemPrompt,
-      messages,
-      tools: TOOLS,
-    });
+    const remainingMs = options.deadlineAt == null
+      ? undefined
+      : options.deadlineAt - Date.now();
+    if (remainingMs != null && remainingMs <= 0) throw new TurnDeadlineError();
+    let response: Anthropic.Message;
+    try {
+      response = await anthropic.messages.create({
+        model,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        system: systemPrompt,
+        messages,
+        tools: TOOLS,
+        output_config: { effort: 'high' },
+      }, {
+        maxRetries: 0,
+        ...(remainingMs == null ? {} : { timeout: remainingMs }),
+      });
+    } catch (error) {
+      if (options.deadlineAt != null && Date.now() >= options.deadlineAt) {
+        throw new TurnDeadlineError();
+      }
+      throw error;
+    }
+    throwIfDeadlineExpired(options.deadlineAt);
 
     // Extract text from this iteration
     const textBlocks = response.content.filter(
@@ -129,8 +179,11 @@ export async function chat(userMessage: string): Promise<string> {
       const truncatedNotice =
         "That answer ran long and got cut off before I could finish. " +
         'Ask me again — I\'ll keep it tighter.';
-      addMessage('user', userMessage);
-      addMessage('assistant', truncatedNotice);
+      if (persist) {
+        addMessage('user', userMessage);
+        addMessage('assistant', truncatedNotice);
+      }
+      options.onProgress?.('complete');
       return truncatedNotice;
     }
 
@@ -162,11 +215,11 @@ export async function chat(userMessage: string): Promise<string> {
       // Store BOTH messages after success (CRIT-001 fix).
       // Skip both if the assistant response is empty to avoid orphaned
       // user messages that corrupt subsequent history.
-      if (finalText) {
+      if (persist && finalText) {
         addMessage('user', userMessage);
         addMessage('assistant', finalText);
       }
-
+      options.onProgress?.('complete');
       return finalText;
     }
 
@@ -196,12 +249,15 @@ export async function chat(userMessage: string): Promise<string> {
       toolBlock: Anthropic.ToolUseBlock,
     ): Promise<Anthropic.ToolResultBlockParam> => {
       const started = Date.now();
-      console.log(`[tool] ${toolBlock.name}(${JSON.stringify(toolBlock.input)})`);
+      options.onProgress?.('running_tools');
+      const input = toolBlock.input as Record<string, unknown>;
+      console.log(`[tool] ${toolBlock.name} input_keys=${Object.keys(input).join(',') || 'none'}`);
 
-      const result = await toolExecutor.execute(
+      const result = await executor.execute(
         toolBlock.name,
-        toolBlock.input as Record<string, unknown>,
+        input,
       );
+      throwIfDeadlineExpired(options.deadlineAt);
 
       console.log(`[tool] ${toolBlock.name} done in ${Date.now() - started}ms`);
       return {
@@ -244,7 +300,10 @@ export async function chat(userMessage: string): Promise<string> {
   // always terminate via the early return above.
   const fallbackText =
     '[Max tool iterations reached. Please try again or rephrase your request.]';
-  addMessage('user', userMessage);
-  addMessage('assistant', fallbackText);
+  if (persist) {
+    addMessage('user', userMessage);
+    addMessage('assistant', fallbackText);
+  }
+  options.onProgress?.('complete');
   return fallbackText;
 }

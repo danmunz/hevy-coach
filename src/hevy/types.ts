@@ -51,6 +51,22 @@ export interface HevyCompletedWorkout {
   exercises: HevyCompletedWorkoutExercise[];
 }
 
+/** A single set returned by Hevy's exercise-history endpoint. */
+export interface HevyExerciseHistoryEntry {
+  workoutId: string;
+  workoutTitle?: string;
+  workoutStartTime?: string;
+  workoutEndTime?: string;
+  exerciseTemplateId: string;
+  weightKg?: number | null;
+  reps?: number | null;
+  distanceMeters?: number | null;
+  durationSeconds?: number | null;
+  rpe?: number | null;
+  customMetric?: number | null;
+  setType?: string;
+}
+
 /** A paginated response of completed workouts. */
 export interface HevyCompletedWorkoutPage {
   page: number;
@@ -84,4 +100,17 @@ export interface RoutineExercisePayload {
 export interface RoutinePayload {
   title: string;
   exercises: RoutineExercisePayload[];
+}
+
+/**
+ * Stable routine fields used to detect a change made outside the bot. Server
+ * IDs and timestamps are deliberately excluded.
+ */
+export interface HevyRoutineSnapshot {
+  title: string;
+  exercises: Array<{
+    exerciseTemplateId: string;
+    supersetId: number | null;
+    sets: Array<{ type: string; weightKg: number; reps: number }>;
+  }>;
 }

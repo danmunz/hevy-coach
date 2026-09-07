@@ -7,6 +7,9 @@
     "start": "tsx src/index.ts",
     "setup": "tsx scripts/setup.ts",
     "chat": "tsx scripts/chat.ts",
+    "recover:hevy": "tsx scripts/reconcile-pending-hevy-mutation.ts",
+    "test": "tsx --test tests/**/*.test.ts",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit",
     "pm2:start": "pm2 start ecosystem.config.cjs",
     "pm2:stop": "pm2 stop hevy-coach",
     "pm2:restart": "pm2 restart hevy-coach",
@@ -14,7 +17,7 @@
     "pm2:status": "pm2 status"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/sdk": "^0.124.0",
     "better-sqlite3": "^11.7.0",
     "dotenv": "^16.4.7",
     "telegraf": "^4.16.3"
