@@ -7,19 +7,21 @@ import { prepareFreshContext } from './coach/fresh-context.js';
 import { Telegraf } from 'telegraf';
 
 import { chat } from './claude/client.js';
-import { TurnDeadlineError, TurnExpiredError, TurnQueue } from './claude/turn-queue.js';
-import { sanitizeHtml, sendSplitMessages } from './telegram/client.js';
+import { TurnQueue } from './claude/turn-queue.js';
+import { safeErrorFields, sendSplitMessages } from './telegram/client.js';
+
+import { handleMessageTurn } from './telegram/handler.js';
 
 // ---------------------------------------------------------------------------
 // Global error handlers
 // ---------------------------------------------------------------------------
 
 process.on('unhandledRejection', (reason) => {
-  console.error('[fatal] Unhandled rejection:', reason);
+  console.error('[fatal] Unhandled rejection:', safeErrorFields(reason));
 });
 
 process.on('uncaughtException', (err) => {
-  console.error('[fatal] Uncaught exception:', err);
+  console.error('[fatal] Uncaught exception:', safeErrorFields(err));
   process.exit(1);
 });
 
@@ -64,7 +66,7 @@ console.log(`[startup] revision=${revision}`);
 // ---------------------------------------------------------------------------
 
 bot.catch((err, ctx) => {
-  console.error(`[telegram] Error for ${ctx.updateType}:`, err);
+  console.error(`[telegram] Error for ${ctx.updateType}:`, safeErrorFields(err));
 });
 
 // ---------------------------------------------------------------------------
@@ -95,48 +97,31 @@ bot.on('text', async (ctx) => {
   }, 4000);
 
   try {
-    const response = await turnQueue.run(async (turn) => {
-      console.log(`[turn] id=${turnId} queue_ms=${turn.queueWaitMs} budget_ms=${turn.deadlineAt - turn.startedAt}`);
-      const contextStarted = Date.now();
-      const context = await prepareFreshContext(sync, new HevyClient(undefined, turn.deadlineAt, event => console.log(`[http] turn=${turnId} ${JSON.stringify(event)}`)), turn.deadlineAt);
-      console.log(`[turn] id=${turnId} context_ms=${Date.now()-contextStarted}`);
-      return chat(ctx.message.text, {
-        deadlineAt: turn.deadlineAt,
-        turnId,
-        freshContext: context.text,
-        freshWorkouts: context.workouts,
-        freshRoutines: context.routines,
-        onProgress: (stage) => {
-          console.log(`[turn] id=${turnId} stage=${stage}`);
-          const reaction = stage === 'running_tools' ? '⚡' : stage === 'calling_model' ? '✍' : undefined;
-          if (reaction) void ctx.react(reaction).catch(() => undefined);
-        },
-      });
-    }, receivedAt);
-    clearInterval(typingInterval);
-
-    const sanitized = sanitizeHtml(response);
-    if (!sanitized.trim()) {
-      console.warn('[telegram] Claude returned empty response, sending fallback');
-      await ctx.reply("I couldn't generate a response. Try again in a moment.");
-    } else {
-      await sendSplitMessages(ctx, sanitized, event => console.log(`[delivery] id=${turnId} ${JSON.stringify(event)}`));
-    }
-    console.log(`[turn] id=${turnId} status=delivered total_ms=${Date.now()-receivedAt}`);
-  } catch (error) {
-    clearInterval(typingInterval);
-    console.error(`[turn] id=${turnId} status=failed total_ms=${Date.now()-receivedAt}`, error);
-
-    try {
-      await ctx.reply(
-        error instanceof TurnExpiredError || error instanceof TurnDeadlineError
-          ? error.message
-          : 'Something went wrong. Try again in a moment.',
-      );
-    } catch {
-      // If even the error message fails to send, just log it
-      console.error('[telegram] Failed to send error message to user');
-    }
+    await handleMessageTurn({
+      queue: turnQueue,
+      receivedAt,
+      deliver: (text, deadlineAt) => sendSplitMessages(ctx, text, event => console.log(`[delivery] id=${turnId} ${JSON.stringify(event)}`), { deadlineAt }),
+      logFailure: fields => console.error(`[turn] id=${turnId} status=failed total_ms=${Date.now()-receivedAt}`, fields),
+      coach: async (turn) => {
+        console.log(`[turn] id=${turnId} queue_ms=${turn.queueWaitMs} budget_ms=${turn.deadlineAt - turn.startedAt}`);
+        const contextStarted = Date.now();
+        const context = await prepareFreshContext(sync, new HevyClient(undefined, turn.deadlineAt, event => console.log(`[http] turn=${turnId} ${JSON.stringify(event)}`)), turn.deadlineAt);
+        console.log(`[turn] id=${turnId} context_ms=${Date.now()-contextStarted}`);
+        return chat(ctx.message.text, {
+          deadlineAt: turn.deadlineAt,
+          turnId,
+          freshContext: context.text,
+          freshWorkouts: context.workouts,
+          freshRoutines: context.routines,
+          onProgress: (stage) => {
+            console.log(`[turn] id=${turnId} stage=${stage}`);
+            const reaction = stage === 'running_tools' ? '⚡' : stage === 'calling_model' ? '✍' : undefined;
+            if (reaction) void ctx.react(reaction).catch(() => undefined);
+          },
+        });
+      },
+    });
+    console.log(`[turn] id=${turnId} event=finished total_ms=${Date.now()-receivedAt}`);
   } finally {
     clearInterval(typingInterval);
     void ctx.react().catch(() => undefined);

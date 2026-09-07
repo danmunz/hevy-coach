@@ -6,6 +6,7 @@ import { Context } from 'telegraf';
 
 const MAX_CHUNK = 2000;
 const MAX_RATE_LIMIT_WAIT_MS = 30_000;
+export const DELIVERY_TIMEOUT_MS = 30_000;
 
 /** Tags that Telegram's HTML parse mode supports. */
 const ALLOWED_TAGS = new Set(['b', 'i', 'u', 's', 'code', 'pre', 'a']);
@@ -126,6 +127,18 @@ export class DeliveryError extends Error {
   }
 }
 
+export class DeliveryTimeoutError extends Error {
+  constructor() { super('Telegram delivery time expired. Delivery is uncertain.'); this.name = 'DeliveryTimeoutError'; }
+}
+
+/** Retain only fixed categories and numeric codes. Never log error messages or payloads. */
+export function safeErrorFields(error: unknown): { kind: string; code?: number; deliveredChunks?: number; totalChunks?: number } {
+  if (error instanceof DeliveryError) return { kind: 'delivery', deliveredChunks: error.deliveredChunks, totalChunks: error.totalChunks };
+  if (error instanceof DeliveryTimeoutError) return { kind: 'delivery_timeout' };
+  const code = telegramFailure(error).error_code;
+  return { kind: 'request_error', ...(typeof code === 'number' && Number.isFinite(code) ? { code } : {}) };
+}
+
 function telegramFailure(error: unknown): { error_code?: number; description?: string; parameters?: { retry_after?: number } } {
   if (typeof error !== 'object' || error === null || !('response' in error)) return {};
   const response = error.response;
@@ -134,19 +147,35 @@ function telegramFailure(error: unknown): { error_code?: number; description?: s
 
 /** Send ordered chunks. Retry only explicit Telegram rejections that confirm no delivery. */
 export async function sendSplitMessages(
-  ctx: Pick<Context, 'reply'>,
+  ctx: Pick<Context, 'reply'> & Partial<Pick<Context, 'telegram' | 'chat'>>,
   text: string,
   onProgress?: (progress: DeliveryProgress) => void,
+  options: { timeoutMs?: number; deadlineAt?: number } = {},
 ): Promise<void> {
   if (!text.trim()) return;
   const chunks = splitIntoChunks(text);
   const startedAt = Date.now();
+  const timeoutMs = options.timeoutMs ?? DELIVERY_TIMEOUT_MS;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new RangeError('Delivery timeout must be positive.');
+  const deadlineAt = Math.min(startedAt + timeoutMs, options.deadlineAt ?? Infinity);
+  // The abort signal also cancels Telegraf's underlying HTTP request.
+  const controller = new AbortController();
+  const bounded = async <T>(work: () => Promise<T>): Promise<T> => {
+    const remaining = deadlineAt - Date.now();
+    if (remaining <= 0) throw new DeliveryTimeoutError();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([work(), new Promise<never>((_, reject) => {
+        timer = setTimeout(() => { reject(new DeliveryTimeoutError()); controller.abort(); }, remaining);
+      })]);
+    } finally { if (timer) clearTimeout(timer); }
+  };
   let deliveredChunks = 0;
   const report = (status: DeliveryProgress['status']): void => {
     try {
       onProgress?.({ deliveredChunks, totalChunks: chunks.length, elapsedMs: Date.now() - startedAt, status });
-    } catch (error) {
-      console.warn('[telegram] Delivery observer failed:', error instanceof Error ? error.message : String(error));
+    } catch {
+      console.warn('[telegram] Delivery observer failed.');
     }
   };
   for (const chunk of chunks) {
@@ -155,7 +184,17 @@ export async function sendSplitMessages(
     try {
       for (;;) {
         try {
-          await ctx.reply(plain ? htmlToPlainText(chunk) : chunk, plain ? undefined : { parse_mode: 'HTML' });
+          await bounded(() => {
+            const payload = plain ? htmlToPlainText(chunk) : chunk;
+            if (ctx.telegram && ctx.chat) {
+              return ctx.telegram.callApi('sendMessage', {
+                chat_id: ctx.chat.id, text: payload, ...(plain ? {} : { parse_mode: 'HTML' as const }),
+              // Telegraf types use the older abort-controller interface. Node's signal
+              // implements the cancellation protocol used by its node-fetch transport.
+              }, { signal: controller.signal as unknown as NonNullable<Parameters<Context['telegram']['callApi']>[2]>['signal'] });
+            }
+            return ctx.reply(payload, plain ? undefined : { parse_mode: 'HTML' });
+          });
           break;
         } catch (error) {
           const failure = telegramFailure(error);
@@ -167,6 +206,7 @@ export async function sendSplitMessages(
           if (!rateLimitRetried && failure.error_code === 429 && typeof delay === 'number'
             && Number.isFinite(delay) && delay >= 0 && delay * 1000 <= MAX_RATE_LIMIT_WAIT_MS) {
             rateLimitRetried = true;
+            if (delay * 1000 >= deadlineAt - Date.now()) throw new DeliveryTimeoutError();
             await new Promise(resolve => setTimeout(resolve, delay * 1000));
             continue;
           }
