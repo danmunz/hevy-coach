@@ -2,9 +2,10 @@ import Anthropic from '@anthropic-ai/sdk';
 
 import { assembleSystemPrompt, loadChatHistory } from './context.js';
 import { TOOLS } from './tools.js';
-import { READ_ONLY_TOOLS, ToolExecutor, type ToolOutcome } from './tool-executor.js';
+import { READ_ONLY_TOOLS, ToolExecutor, validateWorkoutCount, type ToolOutcome } from './tool-executor.js';
 import { HevyClient, type HevyToolClient } from '../hevy/client.js';
 import { addMessagePair } from '../state/chatlog.js';
+import { contextSection } from '../coach/fresh-context.js';
 import { summarizeWorkouts } from '../hevy/summarize.js';
 import type { HevyCompletedWorkout, HevyRoutineRecord } from '../hevy/types.js';
 import { TurnDeadlineError } from './turn-queue.js';
@@ -158,7 +159,8 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
     })
     : toolExecutor;
   // 1. Assemble context (before storing the user message — CRIT-001 fix)
-  const assembledSystemPrompt = assembleSystemPrompt(options.freshContext);
+  let currentFreshContext = options.freshContext ?? '';
+  const assembledSystemPrompt = assembleSystemPrompt(currentFreshContext);
   let systemPrompt: Anthropic.TextBlockParam[] = options.disablePromptCache
     ? assembledSystemPrompt.map((block) => ({ type: block.type, text: block.text }))
     : assembledSystemPrompt;
@@ -186,6 +188,52 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
   // final response — never appended to one that has its own text.
   let iterations = 0;
   let freshRoutines = options.freshRoutines;
+  let freshWorkouts = options.freshWorkouts;
+  const checkedWorkoutResults = new Map<number, string>();
+  let checkedRoutineResult: string | undefined;
+  const replaceCheckedContext = (kind: 'workouts' | 'routines', text: string): void => {
+    const replacement = contextSection(kind, text, kind === 'workouts' ? 6000 : 3000);
+    currentFreshContext = currentFreshContext.includes(`<checked_${kind}>`)
+      ? currentFreshContext.replace(new RegExp(`<checked_${kind}>[\\s\\S]*?</checked_${kind}>`), () => replacement)
+      : `${currentFreshContext}\n${replacement}`;
+    const next = assembleSystemPrompt(currentFreshContext);
+    systemPrompt = options.disablePromptCache ? next.map(block => ({type:block.type,text:block.text})) : next;
+  };
+  const runRead = async (name: string, input: Record<string, unknown>): Promise<ToolOutcome> => {
+    if (input.refresh !== undefined && typeof input.refresh !== 'boolean') {
+      return {result:'Refresh must be true or false.', status:'error'};
+    }
+    let count = 5;
+    if (name === 'hevy_get_recent_workouts') {
+      try { count = validateWorkoutCount(input.count); }
+      catch { return {result:'Workout count must be an integer from 1 through 10.', status:'error'}; }
+      if (input.refresh !== true) {
+        const result = checkedWorkoutResults.get(count) ?? (freshWorkouts ? summarizeWorkouts(freshWorkouts.slice(0, count)) : undefined);
+        if (result !== undefined) return {result, status:'success'};
+      } else {
+        freshWorkouts = undefined;
+        checkedWorkoutResults.clear();
+      }
+    }
+    if (name === 'hevy_get_routines' && input.routine_id === undefined) {
+      if (input.refresh !== true) {
+        const result = checkedRoutineResult ?? (freshRoutines ? JSON.stringify(freshRoutines) : undefined);
+        if (result !== undefined) return {result, status:'success'};
+      } else { freshRoutines = undefined; checkedRoutineResult = undefined; }
+    }
+    const outcome = await executor.executeWithOutcome(name, input);
+    if (name === 'hevy_get_recent_workouts' || name === 'hevy_get_routines') {
+      const kind = name === 'hevy_get_recent_workouts' ? 'workouts' : 'routines';
+      if (outcome.status === 'success') {
+        if (kind === 'workouts') checkedWorkoutResults.set(count, outcome.result);
+        else if (input.routine_id === undefined) checkedRoutineResult = outcome.result;
+        replaceCheckedContext(kind, `Latest successful tool check:\n${outcome.result}`);
+      } else if (input.refresh === true) {
+        replaceCheckedContext(kind, 'The requested refresh failed. Current data is unavailable. Do not treat earlier data as current.');
+      }
+    }
+    return outcome;
+  };
   const preToolText: string[] = [];
 
   while (iterations < maxToolIterations) {
@@ -338,21 +386,21 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
       throwIfDeadlineExpired(options.deadlineAt);
       const key = JSON.stringify([toolBlock.name, input]);
       const read = READ_ONLY_TOOLS.has(toolBlock.name);
-      if (!read) {
-        readCache.clear();
-        freshRoutines = undefined;
-        if (options.freshContext) systemPrompt = systemPrompt.map(block => ({...block, text:block.text.replace(options.freshContext!, 'Earlier checked context was invalidated by a mutation. Use current tool results or refresh before further planning.')}));
-      }
       let task = read ? readCache.get(key) : undefined;
       if (!task) {
-        task = toolBlock.name === 'hevy_get_recent_workouts' && options.freshWorkouts
-          ? Promise.resolve({result:summarizeWorkouts(options.freshWorkouts.slice(0, Math.max(1, Math.min(typeof input.count === 'number' ? input.count : 5, 10)))),status:'success' as const})
-          : toolBlock.name === 'hevy_get_routines' && freshRoutines
-            ? Promise.resolve({result:JSON.stringify(freshRoutines),status:'success' as const})
-            : executor.executeWithOutcome(toolBlock.name, input);
+        task = read ? runRead(toolBlock.name, input) : executor.executeWithOutcome(toolBlock.name, input);
         if (read) readCache.set(key, task);
       }
       const outcome = await task;
+      if (!read && outcome.status === 'success' && (toolBlock.name === 'hevy_push_routine' || toolBlock.name === 'hevy_edit_routine_exercise')) {
+        freshRoutines = undefined;
+        checkedRoutineResult = undefined;
+        replaceCheckedContext('routines', 'Routine data changed after the checked snapshot. Request current routine data before further planning.');
+      }
+      if (!read && outcome.status === 'success' && ['save_note', 'clear_note', 'update_training_maxes'].includes(toolBlock.name)) {
+        const next = assembleSystemPrompt(currentFreshContext);
+        systemPrompt = options.disablePromptCache ? next.map(block => ({type:block.type,text:block.text})) : next;
+      }
       const result = outcome.result;
       const failed = outcome.status !== 'success';
       if (failed) readCache.delete(key);
@@ -388,10 +436,11 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
     };
 
     for (const toolBlock of toolUseBlocks) {
-      if (READ_ONLY_TOOLS.has(toolBlock.name)) {
+      if (READ_ONLY_TOOLS.has(toolBlock.name) && (toolBlock.input as Record<string, unknown>).refresh !== true) {
         pendingReads.push(toolBlock);
       } else {
         await flushReads();
+        readCache.clear();
         toolResults.push(await runTool(toolBlock));
       }
     }

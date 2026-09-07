@@ -1,3 +1,4 @@
+import { kilogramsToPounds } from '../hevy/utils.js';
 import { buildRoutineSnapshot, routineSnapshotsMatch, type HevyToolClient } from "../hevy/client.js";
 import type { RoutineExercisePayload, RoutinePayload } from "../hevy/types.js";
 import { resolveExerciseName } from "../hevy/exercise-pins.js";
@@ -179,6 +180,14 @@ export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
   'hevy_get_routines',
 ]);
 
+export function validateWorkoutCount(value: unknown): number {
+  if (value === undefined) return 5;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 10) {
+    throw new Error('Workout count must be an integer from 1 through 10.');
+  }
+  return value;
+}
+
 export class ToolExecutor {
   constructor(
     private hevyClient: HevyToolClient,
@@ -238,7 +247,7 @@ export class ToolExecutor {
       case "hevy_get_exercise_history":
         return await this.getExerciseHistory(toolInput);
       case "hevy_get_routines":
-        return await this.getRoutines();
+        return await this.getRoutines(toolInput);
       case "hevy_push_routine":
         return await this.pushRoutine(toolInput);
       case "hevy_edit_routine_exercise":
@@ -261,8 +270,7 @@ export class ToolExecutor {
   private async getRecentWorkouts(
     input: Record<string, unknown>,
   ): Promise<string> {
-    const count =
-      typeof input.count === "number" ? input.count : 5;
+    const count = validateWorkoutCount(input.count);
     const result = await this.hevyClient.getRecentWorkouts(count);
 
     if (typeof result === "string") return result;
@@ -300,7 +308,16 @@ export class ToolExecutor {
     throw new ToolResultError(`Couldn't fetch history for "${exerciseName}" -- ${result.message}. ${result.suggestion}`);
   }
 
-  private async getRoutines(): Promise<string> {
+  private async getRoutines(input: Record<string, unknown>): Promise<string> {
+    if (input.routine_id !== undefined) {
+      if (typeof input.routine_id !== 'string' || !input.routine_id.trim()) throw new Error('Routine ID must be a nonempty string.');
+      const snapshot = await this.hevyClient.getRoutineSnapshot(input.routine_id);
+      if ('error' in snapshot) throw new ToolResultError(`Couldn't fetch routine -- ${snapshot.message}. ${snapshot.suggestion}`);
+      return JSON.stringify({id:input.routine_id, title:snapshot.title, exercises:snapshot.exercises.map(exercise => ({
+        exercise_template_id:exercise.exerciseTemplateId,
+        sets:exercise.sets.map(set => ({type:set.type, weight_lbs:kilogramsToPounds(set.weightKg), reps:set.reps})),
+      }))});
+    }
     const result = await this.hevyClient.getRoutines();
 
     if (!Array.isArray(result)) {

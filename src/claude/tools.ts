@@ -9,9 +9,10 @@ export const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: 'object',
       properties: {
+        refresh: { type: 'boolean', description: 'Set true to check Hevy again and replace the checked workout data.' },
         count: {
           type: 'number',
-          description: 'Number of recent workouts (default 5, max 10)',
+          description: 'Number of recent workouts (default 5, integer from 1 through 10)',
         },
       },
     },
@@ -39,7 +40,7 @@ export const TOOLS: Anthropic.Tool[] = [
       'List saved routines. Use to find the current standing routine.',
     input_schema: {
       type: 'object',
-      properties: {},
+      properties: { routine_id: { type: 'string', description: 'Pass a routine ID to get all exercise and set details. Omit this field to list routines.' }, refresh: { type: 'boolean', description: 'Set true to check Hevy again and replace the checked routine data.' } },
     },
   },
 
