@@ -1,0 +1,15 @@
+{
+  "sourceArtifactSha256": "8262a5b322481b8a0a64c86548c30a2f46d5dd40ec0507403d8479231d4906da",
+  "sourceCommitSha": "1e0660284f572649d27b71d8ca073c4fa8ae2847",
+  "model": "claude-sonnet-5",
+  "mode": "production",
+  "repetitions": 1,
+  "maxOutputTokens": 16000,
+  "maxToolIterations": 10,
+  "passed": 8,
+  "failed": 0,
+  "truncations": 0,
+  "toolLimitFailures": 0,
+  "latencyImprovementPercent": 19.06073488613456,
+  "costImprovementPercent": 16.02155843170001
+}

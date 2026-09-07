@@ -105,6 +105,8 @@ export interface ChatOptions {
   maxToolIterations?: number;
   /** Reject an evaluation request before it can exceed its reserved input size. */
   maxRequestBytes?: number;
+  /** Evaluation-only control that removes prompt-cache markers from the request. */
+  disablePromptCache?: boolean;
 }
 
 function throwIfDeadlineExpired(deadlineAt: number | undefined): void {
@@ -150,7 +152,10 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
     })
     : toolExecutor;
   // 1. Assemble context (before storing the user message — CRIT-001 fix)
-  const systemPrompt = assembleSystemPrompt();
+  const assembledSystemPrompt = assembleSystemPrompt();
+  const systemPrompt: Anthropic.TextBlockParam[] = options.disablePromptCache
+    ? assembledSystemPrompt.map((block) => ({ type: block.type, text: block.text }))
+    : assembledSystemPrompt;
   const chatHistory = loadChatHistory();
 
   const model = process.env.CLAUDE_MODEL || 'claude-sonnet-5';

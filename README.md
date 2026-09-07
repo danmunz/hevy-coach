@@ -140,6 +140,26 @@ the four scenarios. It is a production-limit smoke test only: it cannot
 recommend a production effort change because the five-repetition promotion
 gate requires more budget.
 
+### Final effort decision campaign
+
+Run the final campaign only when the frozen production-limit smoke-test
+manifest is valid:
+
+```bash
+npm run evaluate:effort:decision
+```
+
+The command reserves the full matrix before it sends a model request. It runs
+four scenarios, five repetitions, and two effort levels. Its reservation is
+$19.737600. Its hard limit is $20.000000. It does not start a partial matrix.
+The command disables prompt caching. This gives both effort sessions the same
+cache condition. Production prompt caching remains enabled.
+
+The command can recommend `medium` only when the frozen production-limit smoke
+test passes and all forty bounded fixture cases pass. It also requires a 15%
+median latency or modeled-cost gain, no aggregate regression above 5%, and no
+scenario regression above 10%. Any other result retains `high`.
+
 ### 2. Run the Telegram bot (foreground)
 
 ```bash

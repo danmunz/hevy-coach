@@ -215,6 +215,54 @@ test('production dry-run evaluator launches isolated workers and emits a parseab
   }
 });
 
+test('decision dry-run evaluator reserves the complete matrix within the strict $20 limit', () => {
+  const scriptPath = path.resolve('scripts/evaluate-effort.ts');
+  const child = spawnSync(process.execPath, ['--import', 'tsx', scriptPath, 'decision', '5', '--dry-run'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    timeout: 60_000,
+  });
+  assert.equal(child.status, 1, child.stderr);
+  const summary = JSON.parse(child.stdout) as { artifactPath: string; passed: number; failed: number; budgetUsd: number; decisionEligible: boolean };
+  try {
+    assert.equal(summary.passed, 40);
+    assert.equal(summary.failed, 0);
+    assert.equal(summary.budgetUsd, 20);
+    assert.equal(summary.decisionEligible, false);
+    const artifact = JSON.parse(fs.readFileSync(summary.artifactPath, 'utf8')) as {
+      results: Array<{ dryRun?: boolean }>;
+      budget: { limitUsd: number; reservedUsd: number };
+      execution: { plannedWorkers: number; workerReservationMicrodollars: number; requiredReservationMicrodollars: number; maxOutputTokens: number; maxToolIterations: number; sdkRetries: number; promptCaching: string; effortSessionOrder: string[] };
+    };
+    assert.equal(artifact.results.length, 40);
+    assert.ok(artifact.results.every((result) => result.dryRun));
+    assert.equal(artifact.budget.limitUsd, 20);
+    assert.equal(artifact.budget.reservedUsd, 19.7376);
+    assert.equal(artifact.execution.plannedWorkers, 40);
+    assert.equal(artifact.execution.workerReservationMicrodollars, 493_440);
+    assert.equal(artifact.execution.requiredReservationMicrodollars, 19_737_600);
+    assert.equal(artifact.execution.maxOutputTokens, 2048);
+    assert.equal(artifact.execution.maxToolIterations, 3);
+    assert.equal(artifact.execution.sdkRetries, 0);
+    assert.equal(artifact.execution.promptCaching, 'disabled');
+    assert.deepEqual(artifact.execution.effortSessionOrder, ['high', 'medium']);
+  } finally {
+    fs.rmSync(path.dirname(summary.artifactPath), { recursive: true, force: true });
+  }
+});
+
+test('decision evaluator rejects an incomplete matrix before it starts a worker', () => {
+  const scriptPath = path.resolve('scripts/evaluate-effort.ts');
+  const child = spawnSync(process.execPath, ['--import', 'tsx', scriptPath, 'decision', '1', '--dry-run'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    timeout: 30_000,
+  });
+  assert.equal(child.status, 1);
+  assert.match(child.stderr, /Decision mode requires exactly 5 repetitions/);
+  assert.equal(child.stdout, '');
+});
+
 test('routine assessment rejects a fixture write that alters the approved prescription', async () => {
   const fixture = new FixtureHevyClient();
   await fixture.createRoutine(
