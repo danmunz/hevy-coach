@@ -451,3 +451,11 @@ and local tests. Do not put API credentials or personal message text in CI.
 
 No further paid model campaign is part of this release. Streaming, longer cache
 retention, and hosting changes remain deferred until ordinary use provides evidence.
+
+### Freshness recovery
+
+The bot rebuilds its latest-ten workout cache on the first scan after a restart.
+It also rebuilds that cache on the first scan at least one hour after the last
+full refresh. This is a recovery policy, not a claim about Hevy event retention.
+Failed refreshes preserve the previous data and checkpoint. A later scan retries.
+Workout dates use numeric timestamps, so different timezone offsets sort correctly.
