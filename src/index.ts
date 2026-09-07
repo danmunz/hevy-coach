@@ -1,4 +1,9 @@
 import 'dotenv/config';
+import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { HevyClient } from './hevy/client.js';
+import { WorkoutSync, startWorkoutPolling } from './coach/workout-sync.js';
+import { prepareFreshContext } from './coach/fresh-context.js';
 import { Telegraf } from 'telegraf';
 
 import { chat } from './claude/client.js';
@@ -43,6 +48,16 @@ if (missing.length > 0) {
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!);
 const AUTHORIZED_CHAT_ID = process.env.AUTHORIZED_CHAT_ID!;
 const turnQueue = new TurnQueue();
+// Each synchronization scan has a bounded HTTP deadline, including background scans.
+const sync = new WorkoutSync({
+  getRecentWorkoutRecords: count => new HevyClient(undefined, Date.now() + 15_000, event => console.log(`[http] owner=sync ${JSON.stringify(event)}`)).getRecentWorkoutRecords(count),
+  getWorkoutEvents: since => new HevyClient(undefined, Date.now() + 15_000, event => console.log(`[http] owner=sync ${JSON.stringify(event)}`)).getWorkoutEvents(since),
+});
+const stopPolling = startWorkoutPolling(sync, Number(process.env.HEVY_SYNC_INTERVAL_SECONDS ?? 300));
+let revision = 'unknown';
+try { revision = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {encoding:'utf8'}).trim(); }
+catch { console.warn('[startup] Revision unavailable.'); }
+console.log(`[startup] revision=${revision}`);
 
 // ---------------------------------------------------------------------------
 // Bot-level error handler
@@ -64,8 +79,11 @@ bot.on('text', async (ctx) => {
 
   // Receipt and progress indicators are best effort. A Telegram status error
   // must never prevent the queued coaching turn from running.
-  await ctx.replyWithChatAction('typing').catch(() => undefined);
-  await ctx.react('👀').catch(() => undefined);
+  const receivedAt = Date.now();
+  const turnId = randomUUID();
+  console.log(`[turn] id=${turnId} event=received`);
+  void ctx.replyWithChatAction('typing').catch(() => undefined);
+  void ctx.react('👀').catch(() => undefined);
 
   // Keep typing indicator alive while Claude is thinking (expires after ~5s)
   const typingInterval = setInterval(async () => {
@@ -78,16 +96,23 @@ bot.on('text', async (ctx) => {
 
   try {
     const response = await turnQueue.run(async (turn) => {
-      console.log(`[turn] queue_ms=${turn.queueWaitMs} budget_ms=${turn.deadlineAt - turn.startedAt}`);
+      console.log(`[turn] id=${turnId} queue_ms=${turn.queueWaitMs} budget_ms=${turn.deadlineAt - turn.startedAt}`);
+      const contextStarted = Date.now();
+      const context = await prepareFreshContext(sync, new HevyClient(undefined, turn.deadlineAt, event => console.log(`[http] turn=${turnId} ${JSON.stringify(event)}`)), turn.deadlineAt);
+      console.log(`[turn] id=${turnId} context_ms=${Date.now()-contextStarted}`);
       return chat(ctx.message.text, {
         deadlineAt: turn.deadlineAt,
+        turnId,
+        freshContext: context.text,
+        freshWorkouts: context.workouts,
+        freshRoutines: context.routines,
         onProgress: (stage) => {
-          console.log(`[turn] stage=${stage}`);
+          console.log(`[turn] id=${turnId} stage=${stage}`);
           const reaction = stage === 'running_tools' ? '⚡' : stage === 'calling_model' ? '✍' : undefined;
           if (reaction) void ctx.react(reaction).catch(() => undefined);
         },
       });
-    });
+    }, receivedAt);
     clearInterval(typingInterval);
 
     const sanitized = sanitizeHtml(response);
@@ -95,12 +120,12 @@ bot.on('text', async (ctx) => {
       console.warn('[telegram] Claude returned empty response, sending fallback');
       await ctx.reply("I couldn't generate a response. Try again in a moment.");
     } else {
-      await sendSplitMessages(ctx, sanitized);
+      await sendSplitMessages(ctx, sanitized, event => console.log(`[delivery] id=${turnId} ${JSON.stringify(event)}`));
     }
-    await ctx.react().catch(() => undefined);
+    console.log(`[turn] id=${turnId} status=delivered total_ms=${Date.now()-receivedAt}`);
   } catch (error) {
     clearInterval(typingInterval);
-    console.error('[telegram] Error processing message:', error);
+    console.error(`[turn] id=${turnId} status=failed total_ms=${Date.now()-receivedAt}`, error);
 
     try {
       await ctx.reply(
@@ -112,6 +137,9 @@ bot.on('text', async (ctx) => {
       // If even the error message fails to send, just log it
       console.error('[telegram] Failed to send error message to user');
     }
+  } finally {
+    clearInterval(typingInterval);
+    void ctx.react().catch(() => undefined);
   }
 });
 
@@ -125,5 +153,5 @@ bot.launch().then(() => {
 });
 
 // Graceful shutdown
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => { stopPolling(); bot.stop('SIGINT'); });
+process.once('SIGTERM', () => { stopPolling(); bot.stop('SIGTERM'); });

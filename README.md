@@ -424,3 +424,30 @@ and leaves the safety block in place if the remote routine does not match.
 
 **"Something went wrong" on Telegram**
 Usually an HTML parsing error. Check pm2 error logs. The bot tries to fall back to plain text, but edge cases can slip through.
+
+## Refreshed performance release
+
+The bot checks workout changes before every coaching turn. It also checks the
+standing routine. It places checked data below the prompt-cache boundary.
+Config files still reload on each message.
+
+While the bot runs, it checks workout changes every five minutes. Set
+`HEVY_SYNC_INTERVAL_SECONDS=0` to disable background checks. Foreground checks
+remain enabled. Restart the bot after changing this environment variable.
+
+The local SQLite cache holds up to ten recent workouts and a successful check
+time. Updates and deletions apply together. Failed scans preserve the previous
+checkpoint. The cache stores weights in pounds. Background checks call Hevy,
+not Claude. Laptop sleep stops polling. The next check catches up after sleep.
+The bot reports failed freshness checks rather than claiming old data is current.
+
+Telegram delivery uses balanced HTML chunks near 2,000 visible characters.
+It has no fixed pause between chunks. Only explicit formatting rejection causes
+plain-text fallback. An uncertain send does not trigger a duplicate send.
+
+Logs include turn identifiers, model usage, tool outcomes, HTTP attempts,
+context time, queue time, and delivery progress. CI runs both TypeScript checks
+and local tests. Do not put API credentials or personal message text in CI.
+
+No further paid model campaign is part of this release. Streaming, longer cache
+retention, and hosting changes remain deferred until ordinary use provides evidence.
