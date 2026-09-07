@@ -9,7 +9,7 @@ import type { ModelCallMetrics, ModelEffort, ToolCallMetrics } from '../src/clau
 const ALLOWED_EFFORTS = new Set<ModelEffort>(['medium', 'high']);
 const EVALUATION_EFFORTS: readonly ModelEffort[] = ['high', 'medium'];
 const MAX_REPETITIONS = 5;
-const EVALUATION_MAX_OUTPUT_TOKENS = 1024;
+const EVALUATION_MAX_OUTPUT_TOKENS = 2048;
 const EVALUATION_MAX_TOOL_ITERATIONS = 3;
 const MAX_EVALUATION_REQUEST_BYTES = 31_000;
 const MAX_EVALUATION_INPUT_TOKENS = 32_000;

@@ -22,6 +22,7 @@ export const FIXTURE_TEMPLATES: readonly HevyTemplateMatch[] = [
   { id: 'fixture-row', title: 'Seated Row (Cable)', primaryMuscleGroup: 'upper_back' },
   { id: 'fixture-squat', title: 'Squat (Barbell)', primaryMuscleGroup: 'quadriceps' },
   { id: 'fixture-ohp', title: 'Overhead Press (Barbell)', primaryMuscleGroup: 'shoulders' },
+  { id: 'fixture-tricep-pushdown', title: 'Tricep Pushdown (Cable)', primaryMuscleGroup: 'triceps' },
 ];
 
 const FIXTURE_TEMPLATE_IDS = new Map([
@@ -30,7 +31,21 @@ const FIXTURE_TEMPLATE_IDS = new Map([
   ['seated row', 'fixture-row'],
   ['squat', 'fixture-squat'],
   ['overhead press', 'fixture-ohp'],
+  ['tricep pushdown', 'fixture-tricep-pushdown'],
 ]);
+
+const STANDING_LOWER_A_EXERCISES: RoutineExercisePayload[] = [
+  {
+    name: 'Squat',
+    sets: [
+      { type: 'warmup', weightLbs: 45, reps: 10 },
+      { type: 'warmup', weightLbs: 95, reps: 5 },
+      { type: 'normal', weightLbs: 135, reps: 5 },
+      { type: 'normal', weightLbs: 155, reps: 5 },
+      { type: 'normal', weightLbs: 175, reps: 5 },
+    ],
+  },
+];
 
 export interface FixtureRoutineWrite {
   operation: 'create' | 'update';
@@ -51,26 +66,8 @@ export class FixtureHevyClient implements HevyToolClient {
   readonly calls: string[] = [];
 
   private readonly standingRoutine: HevyRoutineSnapshot = buildRoutineSnapshot(
-    'Fixture Upper',
-    [
-      {
-        name: 'Bench Press',
-        sets: [
-          { type: 'warmup', weightLbs: 95, reps: 8 },
-          { type: 'normal', weightLbs: 135, reps: 5 },
-          { type: 'normal', weightLbs: 135, reps: 5 },
-          { type: 'normal', weightLbs: 135, reps: 5 },
-        ],
-      },
-      {
-        name: 'Lat Pulldown',
-        sets: [
-          { type: 'normal', weightLbs: 100, reps: 10 },
-          { type: 'normal', weightLbs: 100, reps: 10 },
-          { type: 'normal', weightLbs: 100, reps: 10 },
-        ],
-      },
-    ],
+    'Fixture Lower A',
+    STANDING_LOWER_A_EXERCISES,
     FIXTURE_TEMPLATE_IDS,
   );
 
@@ -78,8 +75,8 @@ export class FixtureHevyClient implements HevyToolClient {
     this.calls.push(`getRecentWorkouts:${count}`);
     return [
       'Recent workouts:',
-      '- Thu Sep 4: Fixture Upper -- Bench Press: warmup 95x8, 3x135x5, Lat Pulldown: 3x100x10',
-      '- Mon Sep 1: Fixture Upper -- Bench Press: warmup 95x8, 3x130x5, Lat Pulldown: 3x95x10',
+      '- Thu Sep 4: Fixture Lower A -- Squat: warmup barx10, 95x5, 135x5, 155x5, 175x5',
+      '- Mon Sep 1: Fixture Upper A -- Overhead Press: 65x5, 70x5, 80x5; Bench Press: 5x100x5',
     ].join('\n');
   }
 
@@ -99,7 +96,7 @@ export class FixtureHevyClient implements HevyToolClient {
 
   async getRoutines(): Promise<HevyRoutineRecord[]> {
     this.calls.push('getRoutines');
-    return [{ id: 'fixture-standing-routine', title: 'Fixture Upper', folderId: null }];
+    return [{ id: 'fixture-standing-routine', title: 'Fixture Lower A', folderId: null }];
   }
 
   async getRoutineSnapshot(routineId: string): Promise<HevyRoutineSnapshot | HevyApiError> {
@@ -108,7 +105,7 @@ export class FixtureHevyClient implements HevyToolClient {
       return {
         error: true,
         message: `Fixture routine "${routineId}" does not exist.`,
-        suggestion: 'Use the Fixture Upper routine ID.',
+        suggestion: 'Use the Fixture Lower A routine ID.',
       };
     }
     return this.standingRoutine;
@@ -200,22 +197,33 @@ export const EFFORT_FIXTURE_SCENARIOS: readonly EffortFixtureScenario[] = [
   },
   {
     id: 'approved_routine_push',
-    prompt: 'I explicitly approve this exact new Hevy routine. Push it with title "Fixture Push Day": Bench Press warmup 95 lb x 8 for 1 set, then 135 lb x 5 for 3 sets; Lat Pulldown 100 lb x 10 for 3 sets. Do not add, remove, or substitute anything.',
+    prompt: 'I completed today\'s Lower A, Week 1 session. The queued Lower A routine with the same title is no longer needed. I completed the check-in and explicitly approve this exact next Upper B, Week 1 routine. Push it with title "Fixture Upper B". Do not add, remove, or substitute anything: Bench Press warmup bar x 10 for 1 set and 65 lb x 5 for 1 set, then 100 lb x 5, 115 lb x 5, and 130 lb x 5; Overhead Press 60 lb x 5 for 5 sets; Lat Pulldown 100 lb x 10 for 3 sets; Seated Row 80 lb x 10 for 3 sets; Tricep Pushdown 40 lb x 12 for 3 sets.',
     requiredTools: ['hevy_push_routine'],
     allowedMutationTools: ['hevy_push_routine'],
   },
 ];
 
-const EXPECTED_PUSH_SNAPSHOT = buildRoutineSnapshot(
-  'Fixture Push Day',
+export const EXPECTED_PUSH_SNAPSHOT = buildRoutineSnapshot(
+  'Fixture Upper B',
   [
     {
       name: 'Bench Press',
       sets: [
-        { type: 'warmup', weightLbs: 95, reps: 8 },
-        { type: 'normal', weightLbs: 135, reps: 5 },
-        { type: 'normal', weightLbs: 135, reps: 5 },
-        { type: 'normal', weightLbs: 135, reps: 5 },
+        { type: 'warmup', weightLbs: 45, reps: 10 },
+        { type: 'warmup', weightLbs: 65, reps: 5 },
+        { type: 'normal', weightLbs: 100, reps: 5 },
+        { type: 'normal', weightLbs: 115, reps: 5 },
+        { type: 'normal', weightLbs: 130, reps: 5 },
+      ],
+    },
+    {
+      name: 'Overhead Press',
+      sets: [
+        { type: 'normal', weightLbs: 60, reps: 5 },
+        { type: 'normal', weightLbs: 60, reps: 5 },
+        { type: 'normal', weightLbs: 60, reps: 5 },
+        { type: 'normal', weightLbs: 60, reps: 5 },
+        { type: 'normal', weightLbs: 60, reps: 5 },
       ],
     },
     {
@@ -224,6 +232,22 @@ const EXPECTED_PUSH_SNAPSHOT = buildRoutineSnapshot(
         { type: 'normal', weightLbs: 100, reps: 10 },
         { type: 'normal', weightLbs: 100, reps: 10 },
         { type: 'normal', weightLbs: 100, reps: 10 },
+      ],
+    },
+    {
+      name: 'Seated Row',
+      sets: [
+        { type: 'normal', weightLbs: 80, reps: 10 },
+        { type: 'normal', weightLbs: 80, reps: 10 },
+        { type: 'normal', weightLbs: 80, reps: 10 },
+      ],
+    },
+    {
+      name: 'Tricep Pushdown',
+      sets: [
+        { type: 'normal', weightLbs: 40, reps: 12 },
+        { type: 'normal', weightLbs: 40, reps: 12 },
+        { type: 'normal', weightLbs: 40, reps: 12 },
       ],
     },
   ],
@@ -340,6 +364,11 @@ export function seedEffortFixtureState(): void {
   `);
   setConfig('training_maxes', JSON.stringify({ squat: 205, bench: 155, deadlift: 275, ohp: 95 }));
   setConfig('goals', 'Preserve muscle during cut, maintain or slowly progress strength');
+  setConfig('routine_id', 'fixture-standing-routine');
+  setConfig('last_routine_payload', JSON.stringify({
+    title: 'Fixture Lower A',
+    exercises: STANDING_LOWER_A_EXERCISES,
+  }));
   // Approved writes happen after a check-in. Seed it so this fixture evaluates
   // approval and payload behavior instead of first-contact UX.
   addMessage('user', 'I slept well, have good energy, and nothing is hurting today.');

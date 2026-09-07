@@ -7,11 +7,12 @@ import test from 'node:test';
 import {
   assessFixtureScenario,
   EFFORT_FIXTURE_SCENARIOS,
+  EXPECTED_PUSH_SNAPSHOT,
   FixtureHevyClient,
   seedEffortFixtureState,
 } from '../scripts/effort-fixtures.js';
 import { closeDbForTests, configureDbPathForTests, getDb } from '../src/state/db.js';
-import { getTrainingMaxes, setConfig } from '../src/state/config.js';
+import { getConfig, getTrainingMaxes, setConfig } from '../src/state/config.js';
 import { saveNote } from '../src/state/notes.js';
 
 const testDbPath = path.join('/private/tmp', `hevy-coach-effort-fixture-test-${process.pid}.db`);
@@ -128,6 +129,30 @@ test('fixture scenarios cover analysis, safety note, approved max, and exact rou
   );
 });
 
+test('approved routine fixture is a complete Week 1 Upper B session after Lower A', async () => {
+  const fixture = new FixtureHevyClient();
+  const recent = await fixture.getRecentWorkouts();
+  const routines = await fixture.getRoutines();
+  assert.match(recent, /Fixture Lower A -- Squat/);
+  assert.deepEqual(routines, [{ id: 'fixture-standing-routine', title: 'Fixture Lower A', folderId: null }]);
+  assert.deepEqual(EXPECTED_PUSH_SNAPSHOT, {
+    title: 'Fixture Upper B',
+    exercises: [
+      { exerciseTemplateId: 'fixture-bench', supersetId: null, sets: [
+        { type: 'warmup', weightKg: 20.412, reps: 10 },
+        { type: 'warmup', weightKg: 29.484, reps: 5 },
+        { type: 'normal', weightKg: 45.359, reps: 5 },
+        { type: 'normal', weightKg: 52.163, reps: 5 },
+        { type: 'normal', weightKg: 58.967, reps: 5 },
+      ] },
+      { exerciseTemplateId: 'fixture-ohp', supersetId: null, sets: Array.from({ length: 5 }, () => ({ type: 'normal', weightKg: 27.216, reps: 5 })) },
+      { exerciseTemplateId: 'fixture-lat-pulldown', supersetId: null, sets: Array.from({ length: 3 }, () => ({ type: 'normal', weightKg: 45.359, reps: 10 })) },
+      { exerciseTemplateId: 'fixture-row', supersetId: null, sets: Array.from({ length: 3 }, () => ({ type: 'normal', weightKg: 36.287, reps: 10 })) },
+      { exerciseTemplateId: 'fixture-tricep-pushdown', supersetId: null, sets: Array.from({ length: 3 }, () => ({ type: 'normal', weightKg: 18.144, reps: 12 })) },
+    ],
+  });
+});
+
 test('history assessment rejects an unrelated state-changing tool call', () => {
   seedEffortFixtureState();
   const assessment = assessFixtureScenario(
@@ -145,8 +170,10 @@ test('history assessment rejects an unrelated state-changing tool call', () => {
 test('fixture seed resets every scratch state to the same known baseline', () => {
   seedEffortFixtureState();
   assert.deepEqual(getTrainingMaxes(), { squat: 205, bench: 155, deadlift: 275, ohp: 95 });
-  assert.equal((getDb().prepare('SELECT COUNT(*) AS count FROM exercise_map').get() as { count: number }).count, 5);
+  assert.equal((getDb().prepare('SELECT COUNT(*) AS count FROM exercise_map').get() as { count: number }).count, 6);
   assert.equal((getDb().prepare('SELECT COUNT(*) AS count FROM messages').get() as { count: number }).count, 2);
+  assert.equal(getConfig('routine_id'), 'fixture-standing-routine');
+  assert.match(getConfig('last_routine_payload') ?? '', /Fixture Lower A/);
 
   setConfig('training_maxes', JSON.stringify({ bench: 1 }));
   saveNote('State that must not survive another fixture seed');
