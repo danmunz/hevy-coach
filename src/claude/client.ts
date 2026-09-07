@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { assembleSystemPrompt, loadChatHistory } from './context.js';
 import { TOOLS } from './tools.js';
 import { READ_ONLY_TOOLS, ToolExecutor } from './tool-executor.js';
-import { HevyClient } from '../hevy/client.js';
+import { HevyClient, type HevyToolClient } from '../hevy/client.js';
 import { addMessage } from '../state/chatlog.js';
 import { TurnDeadlineError } from './turn-queue.js';
 
@@ -65,6 +65,18 @@ export interface ModelCallMetrics {
   toolCalls: number;
 }
 
+/**
+ * Per-tool telemetry for isolated evaluation. Callers opt in explicitly; the
+ * production transport continues to log only the tool name and input keys.
+ */
+export interface ToolCallMetrics {
+  iteration: number;
+  name: string;
+  input: Record<string, unknown>;
+  result: string;
+  elapsedMs: number;
+}
+
 export interface ChatOptions {
   /** Default true. Set false for a fully read-only conversation. */
   persist?: boolean;
@@ -79,6 +91,14 @@ export interface ChatOptions {
   onProgress?: (stage: ChatProgressStage) => void;
   /** Per-call telemetry hook. Do not persist raw prompt or response content here. */
   onModelCall?: (metrics: ModelCallMetrics) => void;
+  /**
+   * Replaces the live Hevy transport for an isolated caller such as the
+   * effort evaluator. It is intentionally typed as the production client so
+   * the tool executor follows the same path it does in normal operation.
+   */
+  hevyClient?: HevyToolClient;
+  /** Captures full tool inputs/results only for an explicit evaluation caller. */
+  onToolCall?: (metrics: ToolCallMetrics) => void;
 }
 
 function throwIfDeadlineExpired(deadlineAt: number | undefined): void {
@@ -102,10 +122,10 @@ function throwIfDeadlineExpired(deadlineAt: number | undefined): void {
  */
 export async function chat(userMessage: string, options: ChatOptions = {}): Promise<string> {
   const persist = options.persist ?? true;
-  const activeHevyClient = options.deadlineAt == null
+  const activeHevyClient = options.hevyClient ?? (options.deadlineAt == null
     ? hevyClient
-    : new HevyClient(undefined, options.deadlineAt);
-  const executor = options.allowMutations === false || options.allowHevyWrites === false || options.deadlineAt != null
+    : new HevyClient(undefined, options.deadlineAt));
+  const executor = options.hevyClient != null || options.allowMutations === false || options.allowHevyWrites === false || options.deadlineAt != null
     ? new ToolExecutor(activeHevyClient, {
       allowMutations: options.allowMutations,
       allowHevyWrites: options.allowHevyWrites,
@@ -286,6 +306,14 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
         input,
       );
       throwIfDeadlineExpired(options.deadlineAt);
+
+      options.onToolCall?.({
+        iteration: iterations,
+        name: toolBlock.name,
+        input,
+        result,
+        elapsedMs: Date.now() - started,
+      });
 
       console.log(`[tool] ${toolBlock.name} done in ${Date.now() - started}ms`);
       return {

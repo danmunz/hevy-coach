@@ -173,7 +173,7 @@ function normalizeExerciseHistoryEntry(item: unknown): HevyExerciseHistoryEntry 
 // Structured error type
 // ---------------------------------------------------------------------------
 
-interface HevyApiError {
+export interface HevyApiError {
   error: true;
   message: string;
   suggestion: string;
@@ -181,6 +181,34 @@ interface HevyApiError {
 
 function apiError(message: string, suggestion: string): HevyApiError {
   return { error: true, message, suggestion };
+}
+
+/**
+ * The portion of the Hevy client used by the coaching tool executor. Keeping
+ * this small lets deterministic evaluation fixtures exercise the production
+ * tool loop without making an HTTP request or carrying the client's private
+ * transport state.
+ */
+export interface HevyToolClient {
+  getRecentWorkouts(count?: number): Promise<string | HevyApiError>;
+  getExerciseHistory(
+    templateId: string,
+    options?: { startDate?: string; endDate?: string; exerciseName?: string },
+  ): Promise<string | HevyApiError>;
+  getRoutines(): Promise<HevyRoutineRecord[] | HevyApiError>;
+  getRoutineSnapshot(routineId: string): Promise<HevyRoutineSnapshot | HevyApiError>;
+  createRoutine(
+    title: string,
+    exercises: RoutineExercisePayload[],
+    exerciseMap: Map<string, string>,
+  ): Promise<{ routineId: string } | HevyApiError>;
+  updateRoutine(
+    routineId: string,
+    title: string,
+    exercises: RoutineExercisePayload[],
+    exerciseMap: Map<string, string>,
+  ): Promise<void | HevyApiError>;
+  searchExerciseTemplates(query: string): Promise<HevyTemplateMatch[]>;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { buildRoutineSnapshot, routineSnapshotsMatch, type HevyClient } from "../hevy/client.js";
+import { buildRoutineSnapshot, routineSnapshotsMatch, type HevyToolClient } from "../hevy/client.js";
 import type { RoutineExercisePayload, RoutinePayload } from "../hevy/types.js";
 import { resolveExerciseName } from "../hevy/exercise-pins.js";
 import { getConfig, getTrainingMaxes, setTrainingMaxes } from "../state/config.js";
@@ -31,7 +31,7 @@ function loadExerciseMap(): Map<string, string> {
  * Wraps a search function bound to the HevyClient for use with
  * resolveExerciseName's searchFn parameter.
  */
-function makeSearchFn(client: HevyClient) {
+function makeSearchFn(client: HevyToolClient) {
   return (query: string) => client.searchExerciseTemplates(query);
 }
 
@@ -75,7 +75,7 @@ function loadCachedRoutinePayload(): RoutinePayload | undefined {
 }
 
 async function ensureRemoteRoutineCanBeOverwritten(
-  client: HevyClient,
+  client: HevyToolClient,
   routineId: string,
   cachedPayload: RoutinePayload | undefined,
   exerciseMap: Map<string, string>,
@@ -169,7 +169,7 @@ export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
 
 export class ToolExecutor {
   constructor(
-    private hevyClient: HevyClient,
+    private hevyClient: HevyToolClient,
     private readonly options: { allowMutations?: boolean; allowHevyWrites?: boolean } = {},
   ) {}
 
