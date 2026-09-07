@@ -1,7 +1,7 @@
 import type {
   HevyCompletedWorkout,
   HevyCompletedWorkoutExercise,
-  HevyCompletedWorkoutPage,
+  HevyWorkoutEvent,
   HevyCompletedWorkoutSet,
   HevyExerciseHistoryEntry,
   HevyRoutineRecord,
@@ -75,7 +75,9 @@ function normalizeExercise(
   const r = item as Record<string, unknown>;
   if (typeof r.title !== "string") return undefined;
 
-  const rawSets = Array.isArray(r.sets) ? r.sets : [];
+  if (!Array.isArray(r.sets)) return undefined;
+  const rawSets = r.sets;
+  if (rawSets.some((set) => normalizeSet(set) == null)) return undefined;
 
   return {
     index: typeof r.index === "number" ? r.index : undefined,
@@ -104,7 +106,9 @@ function normalizeWorkout(item: unknown): HevyCompletedWorkout | undefined {
   const r = item as Record<string, unknown>;
   if (typeof r.id !== "string" || typeof r.title !== "string") return undefined;
 
-  const rawExercises = Array.isArray(r.exercises) ? r.exercises : [];
+  if (!Array.isArray(r.exercises)) return undefined;
+  const rawExercises = r.exercises;
+  if (rawExercises.some((exercise) => normalizeExercise(exercise) == null)) return undefined;
 
   return {
     id: r.id,
@@ -211,16 +215,32 @@ export interface HevyToolClient {
   searchExerciseTemplates(query: string): Promise<HevyTemplateMatch[]>;
 }
 
+/** Synchronization failures throw. Callers must retain their old checkpoint. */
+export interface HevyWorkoutSyncClient {
+  getRecentWorkoutRecords(count?: number): Promise<HevyCompletedWorkout[]>;
+  getWorkoutEvents(since: string): Promise<HevyWorkoutEvent[]>;
+}
+
 // ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
 
+export interface HevyHttpEvent {
+  method: string;
+  path: string;
+  attempt: number;
+  elapsedMs: number;
+  status?: number;
+  success: boolean;
+}
+
 export class HevyClient {
   private readonly apiKey: string;
   private templateCache: HevyTemplateMatch[] | null = null;
+  private readonly refreshedMisses = new Set<string>();
   private templatePromise: Promise<HevyTemplateMatch[]> | null = null;
 
-  constructor(apiKey?: string, private readonly deadlineAt?: number) {
+  constructor(apiKey?: string, private readonly deadlineAt?: number, private readonly onHttpEvent?: (event: HevyHttpEvent) => void) {
     this.apiKey = apiKey ?? process.env.HEVY_API_KEY ?? "";
     if (!this.apiKey) {
       console.warn("[hevy] No API key configured. Set HEVY_API_KEY in .env.");
@@ -250,6 +270,9 @@ export class HevyClient {
     const canRetry = method === "GET" || method === "HEAD";
 
     for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+      const startedAt = Date.now();
+      let status: number | undefined;
+      let success = false;
       const controller = new AbortController();
       const remainingMs = this.deadlineAt == null
         ? 15_000
@@ -265,6 +288,8 @@ export class HevyClient {
           signal: controller.signal,
         });
 
+        status = response.status;
+
         // Handle rate limiting (429)
         if (response.status === 429) {
           if (canRetry && attempt < RETRY_CONFIG.maxRetries) {
@@ -275,6 +300,9 @@ export class HevyClient {
                 const seconds = Number(retryAfter);
                 if (Number.isFinite(seconds) && seconds > 0) {
                   waitMs = seconds * 1000;
+                } else {
+                  const retryAt = Date.parse(retryAfter);
+                  if (Number.isFinite(retryAt)) waitMs = Math.max(0, retryAt - Date.now());
                 }
               }
             }
@@ -305,7 +333,9 @@ export class HevyClient {
           );
         }
 
-        return (await response.json()) as T;
+        const result = (await response.json()) as T;
+        success = true;
+        return result;
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
 
@@ -322,6 +352,12 @@ export class HevyClient {
         throw lastError;
       } finally {
         clearTimeout(timeoutId);
+        try {
+          this.onHttpEvent?.({ method, path: path.split("?")[0], attempt: attempt + 1,
+            elapsedMs: Date.now() - startedAt, status, success });
+        } catch (error) {
+          console.warn("[hevy] HTTP telemetry callback failed:", error instanceof Error ? error.message : String(error));
+        }
       }
     }
 
@@ -361,45 +397,74 @@ export class HevyClient {
     count: number = 5,
   ): Promise<string | HevyApiError> {
     try {
-      const requestCount = Math.max(1, Math.min(count, 10));
-      const workouts: HevyCompletedWorkout[] = [];
-      const pageSize = Math.min(requestCount, 10);
-      let page = 1;
-
-      while (workouts.length < requestCount) {
-        const payload = await this.fetchJson<Record<string, unknown>>(
-          `/workouts?page=${page}&pageSize=${pageSize}`,
-        );
-
-        const rawWorkouts = Array.isArray(payload.workouts)
-          ? payload.workouts
-          : [];
-        const normalized = rawWorkouts
-          .map(normalizeWorkout)
-          .filter((w): w is HevyCompletedWorkout => w != null);
-
-        if (normalized.length === 0) break;
-        workouts.push(...normalized);
-
-        const pageCount =
-          typeof payload.page_count === "number"
-            ? payload.page_count
-            : typeof (payload as Record<string, unknown>).pageCount === "number"
-              ? (payload as Record<string, unknown>).pageCount as number
-              : page;
-
-        if (page >= pageCount) break;
-        page++;
-      }
-
-      const trimmed = workouts.slice(0, requestCount);
-      return summarizeWorkouts(trimmed);
+      return summarizeWorkouts(await this.getRecentWorkoutRecords(count));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return apiError(
         `Failed to fetch recent workouts: ${msg}`,
         "Check that HEVY_API_KEY is set and valid. Try again in a moment.",
       );
+    }
+  }
+
+  async getRecentWorkoutRecords(count = 10): Promise<HevyCompletedWorkout[]> {
+    if (!Number.isInteger(count) || count < 1 || count > 10) {
+      throw new Error("Workout count must be an integer from 1 through 10.");
+    }
+    const payload = await this.fetchJson<Record<string, unknown>>(
+      `/workouts?page=1&pageSize=${count}`,
+    );
+    if (!Array.isArray(payload.workouts)) throw new Error("Invalid workout page.");
+    return payload.workouts.map((raw) => {
+      const workout = normalizeWorkout(raw);
+      if (!workout || !raw || typeof raw !== "object" ||
+          !Array.isArray((raw as Record<string, unknown>).exercises)) {
+        throw new Error("Invalid workout record.");
+      }
+      return workout;
+    }).slice(0, count);
+  }
+
+  async getWorkoutEvents(since: string): Promise<HevyWorkoutEvent[]> {
+    if (!Number.isFinite(Date.parse(since))) throw new Error("Invalid workout event checkpoint.");
+    const events: HevyWorkoutEvent[] = [];
+    let expectedPages: number | undefined;
+    for (let page = 1; ; page++) {
+      const query = new URLSearchParams({ since, page: String(page), pageSize: "10" });
+      const payload = await this.fetchJson<Record<string, unknown>>(`/workouts/events?${query}`);
+      const pageCount = payload.page_count ?? payload.pageCount;
+      if (payload.page !== page || !Number.isInteger(pageCount) ||
+          typeof pageCount !== "number" || pageCount < 0 ||
+          !Array.isArray(payload.events) ||
+          (pageCount < page && !(page === 1 && pageCount === 0 && payload.events.length === 0))) {
+        throw new Error("Invalid workout event page.");
+      }
+      if (expectedPages != null && pageCount !== expectedPages) {
+        throw new Error("Workout event pages changed during synchronization. Retry the scan.");
+      }
+      expectedPages = pageCount;
+      if (pageCount > 0 && payload.events.length === 0) {
+        throw new Error("Incomplete workout event scan.");
+      }
+      for (const raw of payload.events) {
+        if (!raw || typeof raw !== "object") throw new Error("Invalid workout event.");
+        const event = raw as Record<string, unknown>;
+        if (event.type === "updated") {
+          const workout = normalizeWorkout(event.workout);
+          if (!workout || !event.workout || typeof event.workout !== "object" ||
+              !Array.isArray((event.workout as Record<string, unknown>).exercises)) {
+            throw new Error("Invalid updated workout.");
+          }
+          events.push({ type: "updated", workout });
+        } else if (event.type === "deleted" && typeof event.id === "string") {
+          const deletedAt = event.deleted_at ?? event.deletedAt;
+          events.push({ type: "deleted", id: event.id,
+            deletedAt: typeof deletedAt === "string" ? deletedAt : undefined });
+        } else {
+          throw new Error("Unknown workout event. The synchronization checkpoint must not advance.");
+        }
+      }
+      if (page >= pageCount) return events;
     }
   }
 
@@ -607,8 +672,9 @@ export class HevyClient {
    * array would let simultaneous callers on a cold cache each run the full
    * pagination, multiplying the API calls for identical data.
    */
-  async fetchAllTemplates(): Promise<HevyTemplateMatch[]> {
-    if (this.templateCache) return this.templateCache;
+  async fetchAllTemplates(refresh = false): Promise<HevyTemplateMatch[]> {
+    if (this.templatePromise) return this.templatePromise;
+    if (this.templateCache && !refresh) return this.templateCache;
 
     if (!this.templatePromise) {
       // Cleared on settle so a failed fetch doesn't poison later calls.
@@ -624,27 +690,33 @@ export class HevyClient {
     const templates: HevyTemplateMatch[] = [];
     let page = 1;
     const pageSize = 100; // API max
+    let expectedPages: number | undefined;
 
     while (true) {
       const payload = await this.fetchJson<Record<string, unknown>>(
         `/exercise_templates?page=${page}&pageSize=${pageSize}`,
       );
 
-      const rawTemplates = Array.isArray(payload.exercise_templates)
-        ? payload.exercise_templates
-        : Array.isArray(
-              (payload as Record<string, unknown>).exerciseTemplates,
-            )
-          ? (payload as Record<string, unknown>).exerciseTemplates as unknown[]
-          : [];
-
-      if (rawTemplates.length === 0) break;
+      const rawTemplates = payload.exercise_templates ?? payload.exerciseTemplates;
+      const pageCount = payload.page_count ?? payload.pageCount;
+      if (!Array.isArray(rawTemplates) || payload.page !== page ||
+          typeof pageCount !== "number" || !Number.isInteger(pageCount) || pageCount < 0 ||
+          (pageCount < page && !(page === 1 && pageCount === 0 && rawTemplates.length === 0))) {
+        throw new Error("Invalid exercise template page.");
+      }
+      if (rawTemplates.length === 0 && pageCount > 0) {
+        throw new Error("Incomplete exercise template scan.");
+      }
+      if (expectedPages != null && expectedPages !== pageCount) {
+        throw new Error("Exercise template pages changed during the scan.");
+      }
+      expectedPages = pageCount;
 
       for (const raw of rawTemplates) {
-        if (!raw || typeof raw !== "object") continue;
+        if (!raw || typeof raw !== "object") throw new Error("Invalid exercise template.");
         const r = raw as Record<string, unknown>;
         const templateTitle = typeof r.title === "string" ? r.title : "";
-        if (!templateTitle) continue;
+        if (!templateTitle || typeof r.id !== "string" || !r.id) throw new Error("Invalid exercise template.");
 
         templates.push({
           id: typeof r.id === "string" ? r.id : String(r.id ?? ""),
@@ -664,12 +736,6 @@ export class HevyClient {
         });
       }
 
-      const pageCount =
-        typeof payload.page_count === "number"
-          ? payload.page_count
-          : typeof (payload as Record<string, unknown>).pageCount === "number"
-            ? (payload as Record<string, unknown>).pageCount as number
-            : page;
 
       if (page >= pageCount) break;
       page++;
@@ -683,18 +749,24 @@ export class HevyClient {
   /**
    * Searches exercise templates by name query against the in-memory cache.
    *
-   * Fetches and caches all templates on first call. Subsequent calls are
-   * pure in-memory substring matching — zero API calls.
+   * Fetches templates on first use. Cached misses refresh once per query.
+   * Concurrent callers share the refresh.
    */
   async searchExerciseTemplates(
     query: string,
   ): Promise<HevyTemplateMatch[]> {
+    const hadCache = this.templateCache != null;
     const allTemplates = await this.fetchAllTemplates();
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return allTemplates.filter((t) =>
-      t.title.toLowerCase().includes(normalizedQuery),
-    );
+    const normalize = (value: string) => value.toLowerCase().replace(/[-_()]/g, " ").replace(/\s+/g, " ").trim();
+    const normalizedQuery = normalize(query);
+    const matches = (templates: HevyTemplateMatch[]) =>
+      templates.filter((template) => normalize(template.title).includes(normalizedQuery));
+    const found = matches(allTemplates);
+    // A cold fetch already checks the server. Only a stale cache needs a refresh.
+    if (found.length > 0 || !hadCache || this.refreshedMisses.has(normalizedQuery)) return found;
+    const refreshed = await this.fetchAllTemplates(true);
+    this.refreshedMisses.add(normalizedQuery);
+    return matches(refreshed);
   }
 }
 

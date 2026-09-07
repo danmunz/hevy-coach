@@ -93,7 +93,7 @@ export function summarizeWorkouts(workouts: HevyCompletedWorkout[]): string {
     const title = workout.title || "Untitled";
 
     const exerciseSummaries = workout.exercises.map(
-      (ex) => `${ex.title}: ${setGroups(ex.sets)}`,
+      (ex) => `${ex.title}${ex.exerciseTemplateId ? ` [${ex.exerciseTemplateId}]` : ""}: ${setGroups(ex.sets)}${ex.notes ? ` (notes: ${ex.notes})` : ""}`,
     );
 
     const exerciseText =
@@ -101,7 +101,7 @@ export function summarizeWorkouts(workouts: HevyCompletedWorkout[]): string {
         ? exerciseSummaries.join(", ")
         : "no exercises";
 
-    return `- ${date}: ${title} -- ${exerciseText}`;
+    return `- ${date}: ${title} -- ${exerciseText}${workout.description ? ` (notes: ${workout.description})` : ""}`;
   });
 
   return `Recent workouts:\n${lines.join("\n")}`;
@@ -127,9 +127,10 @@ export function summarizeExerciseHistory(
 ): string {
   const workouts = new Map<string, { date?: string; sets: HevyExerciseHistoryEntry[] }>();
   for (const entry of entries) {
-    const workout = workouts.get(entry.workoutId) ?? { date: entry.workoutStartTime, sets: [] };
+    const key = `${entry.workoutId}:${entry.exerciseTemplateId}`;
+    const workout = workouts.get(key) ?? { date: entry.workoutStartTime, sets: [] };
     workout.sets.push(entry);
-    workouts.set(entry.workoutId, workout);
+    workouts.set(key, workout);
   }
   if (workouts.size === 0) {
     return `No history found for "${exerciseName}" from ${coverage.startDate} through ${coverage.endDate}.`;
@@ -137,5 +138,9 @@ export function summarizeExerciseHistory(
   const lines = [...workouts.values()]
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
     .map((workout) => `- ${formatDate(workout.date)}: ${setGroups(workout.sets)}`);
-  return `${exerciseName} history (${coverage.startDate} through ${coverage.endDate}; ${workouts.size} sessions):\n${lines.join("\n")}`;
+  const dates = entries.map((entry) => entry.workoutStartTime).filter((date): date is string => date != null).sort();
+  const returnedCoverage = dates.length > 0
+    ? `Returned dates: ${dates[0]} through ${dates.at(-1)}.`
+    : "Returned dates unavailable.";
+  return `${exerciseName} history (${coverage.startDate} through ${coverage.endDate}; ${workouts.size} sessions):\n${returnedCoverage}\n${lines.join("\n")}`;
 }

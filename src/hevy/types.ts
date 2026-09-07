@@ -114,3 +114,8 @@ export interface HevyRoutineSnapshot {
     sets: Array<{ type: string; weightKg: number; reps: number }>;
   }>;
 }
+
+/** Workout events arrive newest first. */
+export type HevyWorkoutEvent =
+  | { type: "updated"; workout: HevyCompletedWorkout }
+  | { type: "deleted"; id: string; deletedAt?: string };
