@@ -28,6 +28,8 @@ export const EXERCISE_PINS: Record<string, ExerciseLookup> = {
   "Cable Crunch":                   { query: "Cable Crunch", primaryMuscleGroup: "abdominals" },
   "Seated Row":                     { query: "Seated Cable Row - Bar Grip", primaryMuscleGroup: "upper_back" },
 
+  "Seated Row (V Grip)":            { query: "Seated Cable Row - V Grip (Cable)", primaryMuscleGroup: "upper_back" },
+
   // -- Dumbbell exercises --
   "Lateral Raise":                  { query: "Dumbbell Lateral Raise", primaryMuscleGroup: "shoulders" },
   "Incline Bench Press (Dumbbell)": { query: "Incline Dumbbell Bench Press", primaryMuscleGroup: "chest" },

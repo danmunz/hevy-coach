@@ -39,7 +39,7 @@ This release does not depend on an unverified webhook service. Polling and foreg
 ## Remaining decisions and gates
 
 - Equipment choice resolved: use cable seated rows. Dips are unavailable.
-- The Seated Row pin uses the bar-grip cable template for the listed bar attachment. The Dips pin is removed.
+- The Seated Row pin uses bar grip. Seated Row (V Grip) uses the triangle attachment. The Dips pin is removed.
 - Restart and observe the release during normal use. No production latency result is available from local tests.
 - Consider streaming only if model wait still dominates and partial output has clear value.
 - Consider longer prompt-cache retention only after normal-use cache measurements support the additional cost.

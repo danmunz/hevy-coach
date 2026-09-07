@@ -143,6 +143,7 @@ test("home gym pins select cable rows and exclude dips", async () => {
     { id: "51A0EDAA", title: "Ring Dips", primaryMuscleGroup: "chest" },
     { id: "1DF4A847", title: "Seated Row (Machine)", primaryMuscleGroup: "upper_back" },
     { id: "F1D60854", title: "Seated Cable Row - Bar Grip", primaryMuscleGroup: "upper_back" },
+    { id: "0393F233", title: "Seated Cable Row - V Grip (Cable)", primaryMuscleGroup: "upper_back" },
     { id: "5046D0A9", title: "Front Squat", primaryMuscleGroup: "quadriceps" },
     { id: "BE640BA0", title: "Face Pull" },
     { id: "94B7239B", title: "Triceps Rope Pushdown", primaryMuscleGroup: "triceps" },
@@ -151,6 +152,7 @@ test("home gym pins select cable rows and exclude dips", async () => {
     templates.filter((template) => template.title.toLowerCase().includes(query.toLowerCase())));
   assert.equal(map.has("Dips"), false);
   assert.equal(map.get("Seated Row"), "F1D60854");
+  assert.equal(map.get("Seated Row (V Grip)"), "0393F233");
   assert.equal(EXERCISE_PINS["Dips"], undefined);
   assert.equal(map.get("Front Squat"), "5046D0A9");
   assert.equal(map.get("Face Pull"), "BE640BA0");
