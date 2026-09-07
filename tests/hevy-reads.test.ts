@@ -137,11 +137,12 @@ test("a malformed template refresh retains the complete old cache", async () => 
   } finally { globalThis.fetch = original; }
 });
 
-test("generic pins cannot silently select ring dips or a row machine", async () => {
+test("home gym pins select cable rows and exclude dips", async () => {
   const { resolveExerciseMap, EXERCISE_PINS } = await import("../src/hevy/exercise-pins.js");
   const templates = [
     { id: "51A0EDAA", title: "Ring Dips", primaryMuscleGroup: "chest" },
     { id: "1DF4A847", title: "Seated Row (Machine)", primaryMuscleGroup: "upper_back" },
+    { id: "F1D60854", title: "Seated Cable Row - Bar Grip", primaryMuscleGroup: "upper_back" },
     { id: "5046D0A9", title: "Front Squat", primaryMuscleGroup: "quadriceps" },
     { id: "BE640BA0", title: "Face Pull" },
     { id: "94B7239B", title: "Triceps Rope Pushdown", primaryMuscleGroup: "triceps" },
@@ -149,9 +150,10 @@ test("generic pins cannot silently select ring dips or a row machine", async () 
   const map = await resolveExerciseMap(async (query) =>
     templates.filter((template) => template.title.toLowerCase().includes(query.toLowerCase())));
   assert.equal(map.has("Dips"), false);
-  assert.equal(map.has("Seated Row"), false);
+  assert.equal(map.get("Seated Row"), "F1D60854");
+  assert.equal(EXERCISE_PINS["Dips"], undefined);
   assert.equal(map.get("Front Squat"), "5046D0A9");
   assert.equal(map.get("Face Pull"), "BE640BA0");
   assert.equal(map.get("Triceps Rope Pushdown"), "94B7239B");
-  assert.equal(EXERCISE_PINS["Seated Row"].query, "Seated Row");
+  assert.equal(EXERCISE_PINS["Seated Row"].query, "Seated Cable Row - Bar Grip");
 });

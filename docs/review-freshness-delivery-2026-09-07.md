@@ -15,7 +15,9 @@ The implementation engineer and independent reviewers examined the changes. Test
 | PIN-001 | High | Broad matching could select the wrong equipment. | Require a unique exact or word-order match. Read-only verification identified existing equipment conflicts. |
 
 The reviewer found no remaining blocking code defect in the integration before the final test pass.
-The saved Dips and Seated Row mappings still need a user choice. The implementation does not alter those database rows.
+The user confirmed cable seated rows and no dip equipment.
+The follow-up change uses the bar-grip cable template and removes the Dips pin.
+The saved Seated Row mapping now uses that cable template. The saved Dips mapping is removed.
 
 Both TypeScript checks, all 59 local tests, and the whitespace check passed.
 CI repeats the TypeScript checks and local tests.

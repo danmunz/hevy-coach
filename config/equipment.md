@@ -21,6 +21,8 @@
 
 ## Constraints
 - Home gym — no machines beyond the cable pulley
+- Seated rows use the cable pulley and bar attachment, not a row machine
+- No equipment for dips. Do not prescribe dips, including ring or bench dips
 - No training partner — avoid movements requiring a spotter 
   at failure
 - All weights prescribed and displayed in lbs 

@@ -26,7 +26,7 @@ export const EXERCISE_PINS: Record<string, ExerciseLookup> = {
   "Tricep Pushdown":                { query: "Triceps Pushdown" },
   "Triceps Rope Pushdown":          { query: "Triceps Rope Pushdown", primaryMuscleGroup: "triceps" },
   "Cable Crunch":                   { query: "Cable Crunch", primaryMuscleGroup: "abdominals" },
-  "Seated Row":                     { query: "Seated Row", primaryMuscleGroup: "upper_back" },
+  "Seated Row":                     { query: "Seated Cable Row - Bar Grip", primaryMuscleGroup: "upper_back" },
 
   // -- Dumbbell exercises --
   "Lateral Raise":                  { query: "Dumbbell Lateral Raise", primaryMuscleGroup: "shoulders" },
@@ -34,7 +34,6 @@ export const EXERCISE_PINS: Record<string, ExerciseLookup> = {
   "Triceps Extension (Dumbbell)":   { query: "Dumbbell Triceps Extension", primaryMuscleGroup: "triceps" },
 
   // -- Bodyweight / minimal equipment --
-  "Dips":                           { query: "Dips" },
   "Pull Up":                        { query: "Pull Up" },
   "Hanging Knee Raise":             { query: "Hanging Knee Raise" },
   "Lunge":                          { query: "Lunge" },
