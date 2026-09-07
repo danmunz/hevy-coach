@@ -83,3 +83,26 @@ passed the bounded guardrails, medium did not clear the 15% speed/cost threshold
 and the harness is explicitly screening-only. Before a production-equivalent
 evaluation, replace the routine case with an approved Upper B prescription and
 agree an explicit budget for production output and tool-loop limits.
+
+## Program-consistent screening result
+
+After replacing the off-program routine fixture with a complete Week 1 Upper B
+session following Lower A, the paired five-repetition screening campaign again
+completed within the $25 ceiling. It used $0.9869 in modeled cost.
+
+| Measure | High | Medium | Result |
+| --- | ---: | ---: | --- |
+| Fixture cases passed | 9 / 20 | 15 / 20 | Both still fail |
+| Median worker elapsed time | 26.768 s | 17.676 s | Medium 34.0% faster |
+| Equal-case median modeled cost | $0.028568 | $0.019757 | Medium 30.8% lower |
+| Total modeled cost | $0.5502 | $0.4367 | $0.9869 campaign total |
+
+The program-aligned routine exercised the intended safe update path. Seven
+routine writes differed only on the phrase `bar x10`: some model calls sent the
+barbell as 45 lb and others as 0 lb. The fixture now says `45 lb x10`, which
+removes that ambiguity and follows the pounds-only contract.
+
+High also reached the screening output cap in several cases. The corrected run
+therefore remains screening evidence only. It shows a strong medium-effort
+speed and cost signal, but it cannot change the production setting until a
+production-equivalent campaign passes every guardrail.

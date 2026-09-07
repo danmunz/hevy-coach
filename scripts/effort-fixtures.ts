@@ -197,7 +197,7 @@ export const EFFORT_FIXTURE_SCENARIOS: readonly EffortFixtureScenario[] = [
   },
   {
     id: 'approved_routine_push',
-    prompt: 'I completed today\'s Lower A, Week 1 session. The queued Lower A routine with the same title is no longer needed. I completed the check-in and explicitly approve this exact next Upper B, Week 1 routine. Push it with title "Fixture Upper B". Do not add, remove, or substitute anything: Bench Press warmup bar x 10 for 1 set and 65 lb x 5 for 1 set, then 100 lb x 5, 115 lb x 5, and 130 lb x 5; Overhead Press 60 lb x 5 for 5 sets; Lat Pulldown 100 lb x 10 for 3 sets; Seated Row 80 lb x 10 for 3 sets; Tricep Pushdown 40 lb x 12 for 3 sets.',
+    prompt: 'I completed today\'s Lower A, Week 1 session. The queued Lower A routine with the same title is no longer needed. I completed the check-in and explicitly approve this exact next Upper B, Week 1 routine. Push it with title "Fixture Upper B". Do not add, remove, or substitute anything: Bench Press warmup 45 lb x 10 for 1 set and 65 lb x 5 for 1 set, then 100 lb x 5, 115 lb x 5, and 130 lb x 5; Overhead Press 60 lb x 5 for 5 sets; Lat Pulldown 100 lb x 10 for 3 sets; Seated Row 80 lb x 10 for 3 sets; Tricep Pushdown 40 lb x 12 for 3 sets.',
     requiredTools: ['hevy_push_routine'],
     allowedMutationTools: ['hevy_push_routine'],
   },
