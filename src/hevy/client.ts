@@ -492,7 +492,8 @@ export class HevyClient {
       );
       const rawEntries = Array.isArray(payload.exercise_history)
         ? payload.exercise_history
-        : Array.isArray(payload.exerciseHistory) ? payload.exerciseHistory : [];
+        : Array.isArray(payload.exerciseHistory) ? payload.exerciseHistory : null;
+      if (rawEntries === null) throw new Error("Invalid exercise history response.");
       const entries = rawEntries
         .map(normalizeExerciseHistoryEntry)
         .filter((entry): entry is HevyExerciseHistoryEntry => entry != null);
