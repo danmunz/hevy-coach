@@ -57,3 +57,29 @@ promotion run must have an explicit budget and pass every fixed scenario, with
 at least a 15% latency or equal-scenario median cost improvement and no more
 than a 5% regression in the other measure. Retain generated result artifacts
 outside Git when they include personal coaching context.
+
+## Bounded screening result
+
+The paired five-repetition screening campaign completed on 2026-09-07 within
+its $25 ceiling. The private result artifact is deliberately outside Git because
+it includes captured responses and tool inputs.
+
+| Measure | High | Medium | Result |
+| --- | ---: | ---: | --- |
+| Fixture cases passed | 5 / 20 | 7 / 20 | Both fail |
+| Median worker elapsed time | 18.195 s | 17.694 s | Medium 2.8% faster |
+| Equal-case median modeled cost | $0.019907 | $0.020064 | Medium 0.8% higher |
+| Total modeled cost | $0.4291 | $0.3958 | $0.8249 campaign total |
+| Truncated responses | 14 | 8 | Screening limit invalidates comparison |
+| Tool-iteration-cap responses | 1 | 3 | Screening limit invalidates comparison |
+
+The routine fixture also asked for a two-exercise workout that conflicts with
+the configured 5/3/1 Upper B structure. Four repetitions at each effort
+correctly refused to push it. The check-in seed and matching queued routine did
+not remove that program conflict.
+
+**Decision: retain `high`.** This is not evidence for `medium`: neither effort
+passed the bounded guardrails, medium did not clear the 15% speed/cost threshold,
+and the harness is explicitly screening-only. Before a production-equivalent
+evaluation, replace the routine case with an approved Upper B prescription and
+agree an explicit budget for production output and tool-loop limits.
