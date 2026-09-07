@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WorkoutSync, startWorkoutPolling, type PollingClock } from '../src/coach/workout-sync.js';
+import { workoutInPounds } from '../src/hevy/workout-units.js';
+import { summarizeWorkouts } from '../src/hevy/summarize.js';
 import { readWorkoutCache, replaceWorkoutCache } from '../src/state/workouts.js';
 import { configureDbPathForTests, closeDbForTests, getDb } from '../src/state/db.js';
 import type { HevyWorkoutEvent, HevyCompletedWorkout } from '../src/hevy/types.js';
@@ -51,8 +53,13 @@ test('foreground waits for a scan started after activation',async()=>{
 
 test('cache stores pounds and preserves fractional API precision',()=>{
  const w=workout('fractional');w.exercises=[{title:'Dumbbell',sets:[{weightKg:10.206,reps:8}]}];
- replaceWorkoutCache([w],new Date().toISOString());
- assert.equal(readWorkoutCache().workouts[0].exercises[0].sets[0].weightKg,10.206);
+ replaceWorkoutCache([workoutInPounds(w)],new Date().toISOString());
+ const cached = readWorkoutCache().workouts;
+ assert.equal(cached[0].exercises[0].sets[0].weightLbs,10.206 / 0.45359237);
+ assert.equal(summarizeWorkouts(cached), summarizeWorkouts([w]));
+ for (let i = 0; i < 5; i++) replaceWorkoutCache(readWorkoutCache().workouts, new Date().toISOString());
+ assert.deepEqual(readWorkoutCache().workouts, cached);
+ assert.doesNotMatch(JSON.stringify(cached), /weightKg/);
  const row=getDb().prepare('SELECT payload FROM workout_cache').get() as {payload:string};
  assert.doesNotMatch(row.payload,/weightKg/);
  assert.match(row.payload,/weightLbs/);

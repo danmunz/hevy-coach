@@ -7,7 +7,7 @@ import { HevyClient, type HevyToolClient } from '../hevy/client.js';
 import { addMessagePair } from '../state/chatlog.js';
 import { contextSection } from '../coach/fresh-context.js';
 import { summarizeWorkouts } from '../hevy/summarize.js';
-import type { HevyCompletedWorkout, HevyRoutineRecord } from '../hevy/types.js';
+import type { CachedWorkout, HevyRoutineRecord } from '../hevy/types.js';
 import { TurnDeadlineError } from './turn-queue.js';
 
 // ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ export interface ChatOptions {
   /** Default true. Set false for a fully read-only conversation. */
   persist?: boolean;
   freshContext?: string;
-  freshWorkouts?: HevyCompletedWorkout[];
+  freshWorkouts?: CachedWorkout[];
   freshRoutines?: HevyRoutineRecord[];
   turnId?: string;
   /** Default true. Set false to disable every state-changing tool. */
