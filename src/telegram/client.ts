@@ -4,8 +4,8 @@ import { Context } from 'telegraf';
 // Constants
 // ---------------------------------------------------------------------------
 
-const MAX_CHUNK = 800;
-const INTER_CHUNK_DELAY_MS = 400;
+const MAX_CHUNK = 2000;
+const MAX_RATE_LIMIT_WAIT_MS = 30_000;
 
 /** Tags that Telegram's HTML parse mode supports. */
 const ALLOWED_TAGS = new Set(['b', 'i', 'u', 's', 'code', 'pre', 'a']);
@@ -39,7 +39,7 @@ export function sanitizeHtml(text: string): string {
 
   // Step 3: Escape bare special characters that Telegram requires entity-encoded
   result = result
-    .replace(/&/g, '&amp;')
+    .replace(/&(?!(?:amp|lt|gt|quot|#\d+|#x[\da-f]+);)/gi, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
@@ -49,114 +49,136 @@ export function sanitizeHtml(text: string): string {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Message splitting
-// ---------------------------------------------------------------------------
+/** Decode only Telegram HTML entities. Strip tags before decoding literal angle brackets. */
+export function htmlToPlainText(text: string): string {
+  return text.replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, '').replace(/&(?:amp|lt|gt|quot|#\d+|#x[\da-f]+);/gi, (entity) => {
+    const named: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"' };
+    if (named[entity.toLowerCase()]) return named[entity.toLowerCase()];
+    const value = entity.slice(2, -1);
+    const code = value[0].toLowerCase() === 'x' ? parseInt(value.slice(1), 16) : Number(value);
+    return code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff)
+      ? String.fromCodePoint(code) : '\uFFFD';
+  });
+}
 
-/**
- * Split text into chunks that each fit under `MAX_CHUNK` characters.
- *
- * Strategy:
- * 1. Split on double-newlines (paragraph boundaries).
- * 2. Greedily combine paragraphs until the next one would exceed the limit.
- * 3. If a single paragraph exceeds the limit, split it on single newlines.
- * 4. If a single line still exceeds the limit, hard-break at MAX_CHUNK.
- */
-function splitIntoChunks(text: string): string[] {
-  const paragraphs = text.split('\n\n');
+/** Split visible text at paragraph boundaries, then line/word boundaries, with balanced tags. */
+export function splitIntoChunks(text: string): string[] {
+  const tokens = text.match(/<(?:[^>"']|"[^"]*"|'[^']*')*>|&(?:amp|lt|gt|quot|#\d+|#x[\da-f]+);|[^<&]+|[<&]/gi) ?? [];
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+  const units = tokens.flatMap(token => token.startsWith('<') || token.startsWith('&')
+    ? [token] : Array.from(segmenter.segment(token), item => item.segment).flatMap(segment => segment.length > MAX_CHUNK ? Array.from(segment) : [segment]));
   const chunks: string[] = [];
-  let current = '';
-
-  for (const para of paragraphs) {
-    if (para.length === 0) continue;
-
-    // Would adding this paragraph (with separator) exceed the limit?
-    const combined = current ? `${current}\n\n${para}` : para;
-
-    if (combined.length <= MAX_CHUNK) {
-      current = combined;
-      continue;
-    }
-
-    // Flush whatever we have accumulated so far
-    if (current) {
-      chunks.push(current);
-      current = '';
-    }
-
-    // If the paragraph itself fits, start a new accumulator with it
-    if (para.length <= MAX_CHUNK) {
-      current = para;
-      continue;
-    }
-
-    // Paragraph too long — split on single newlines
-    const lines = para.split('\n');
-    for (const line of lines) {
-      if (line.length === 0) continue;
-
-      const combinedLine = current ? `${current}\n${line}` : line;
-
-      if (combinedLine.length <= MAX_CHUNK) {
-        current = combinedLine;
-        continue;
+  const stack: Array<{ name: string; open: string }> = [];
+  let start = 0;
+  while (start < units.length) {
+    let end = start;
+    let visible = 0;
+    let paragraph = 0;
+    let line = 0;
+    let word = 0;
+    while (end < units.length) {
+      const unit = units[end];
+      const size = unit.startsWith('<') ? 0 : unit.startsWith('&') ? htmlToPlainText(unit).length : unit.length;
+      if (visible + size > MAX_CHUNK && end > start) break;
+      visible += size;
+      end++;
+      if (visible >= MAX_CHUNK / 2) {
+        if (unit === '\n' && units[end - 2] === '\n') paragraph = end;
+        else if (unit === '\n') line = end;
+        else if (/^\s+$/.test(unit)) word = end;
       }
-
-      if (current) {
-        chunks.push(current);
-        current = '';
-      }
-
-      // Single line still too long — hard-break
-      if (line.length > MAX_CHUNK) {
-        let remaining = line;
-        while (remaining.length > MAX_CHUNK) {
-          chunks.push(remaining.slice(0, MAX_CHUNK));
-          remaining = remaining.slice(MAX_CHUNK);
-        }
-        if (remaining) {
-          current = remaining;
-        }
+    }
+    if (end < units.length) end = paragraph || line || word || end;
+    let chunk = stack.map(tag => tag.open).join('');
+    for (const unit of units.slice(start, end)) {
+      const tag = unit.match(/^<(\/)?([a-z]+)\b[\s\S]*>$/i);
+      if (!tag) { chunk += unit; continue; }
+      const name = tag[2].toLowerCase();
+      if (!ALLOWED_TAGS.has(name)) continue;
+      if (!tag[1]) {
+        stack.push({ name, open: unit });
+        chunk += unit;
       } else {
-        current = line;
+        const index = stack.map(item => item.name).lastIndexOf(name);
+        if (index >= 0) {
+          while (stack.length > index) chunk += `</${stack.pop()!.name}>`;
+        }
       }
     }
+    chunk += [...stack].reverse().map(tag => `</${tag.name}>`).join('');
+    if (htmlToPlainText(chunk).length > 0) chunks.push(chunk);
+    start = end;
   }
-
-  if (current) {
-    chunks.push(current);
-  }
-
   return chunks;
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
+export interface DeliveryProgress {
+  deliveredChunks: number;
+  totalChunks: number;
+  elapsedMs: number;
+  status: 'sent' | 'failed';
+}
 
-/**
- * Send a (possibly long) text response to the user, splitting into multiple
- * messages for readability on mobile. Each chunk is sent with HTML parse mode
- * and a short delay between messages for natural pacing.
- */
-export async function sendSplitMessages(ctx: Context, text: string): Promise<void> {
-  if (!text || !text.trim()) {
-    console.warn('[telegram] Skipping empty message');
-    return;
+export class DeliveryError extends Error {
+  constructor(public readonly deliveredChunks: number, public readonly totalChunks: number, cause: unknown) {
+    super(`Telegram delivery failed after ${deliveredChunks}/${totalChunks} confirmed chunks`, { cause });
+    this.name = 'DeliveryError';
   }
+}
 
-  const chunks = text.length <= MAX_CHUNK ? [text] : splitIntoChunks(text);
+function telegramFailure(error: unknown): { error_code?: number; description?: string; parameters?: { retry_after?: number } } {
+  if (typeof error !== 'object' || error === null || !('response' in error)) return {};
+  const response = error.response;
+  return typeof response === 'object' && response !== null ? response : {};
+}
 
-  for (let i = 0; i < chunks.length; i++) {
+/** Send ordered chunks. Retry only explicit Telegram rejections that confirm no delivery. */
+export async function sendSplitMessages(
+  ctx: Pick<Context, 'reply'>,
+  text: string,
+  onProgress?: (progress: DeliveryProgress) => void,
+): Promise<void> {
+  if (!text.trim()) return;
+  const chunks = splitIntoChunks(text);
+  const startedAt = Date.now();
+  let deliveredChunks = 0;
+  const report = (status: DeliveryProgress['status']): void => {
     try {
-      await ctx.reply(chunks[i], { parse_mode: 'HTML' });
-    } catch {
-      // HTML parse failed (broken tags across chunks, etc.) — send as plain text
-      await ctx.reply(chunks[i]);
+      onProgress?.({ deliveredChunks, totalChunks: chunks.length, elapsedMs: Date.now() - startedAt, status });
+    } catch (error) {
+      console.warn('[telegram] Delivery observer failed:', error instanceof Error ? error.message : String(error));
     }
-
-    if (i < chunks.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, INTER_CHUNK_DELAY_MS));
+  };
+  for (const chunk of chunks) {
+    let plain = false;
+    let rateLimitRetried = false;
+    try {
+      for (;;) {
+        try {
+          await ctx.reply(plain ? htmlToPlainText(chunk) : chunk, plain ? undefined : { parse_mode: 'HTML' });
+          break;
+        } catch (error) {
+          const failure = telegramFailure(error);
+          if (!plain && failure.error_code === 400 && /can't parse entities|can't find end tag|unsupported start tag/i.test(failure.description ?? '')) {
+            plain = true;
+            continue;
+          }
+          const delay = failure.parameters?.retry_after;
+          if (!rateLimitRetried && failure.error_code === 429 && typeof delay === 'number'
+            && Number.isFinite(delay) && delay >= 0 && delay * 1000 <= MAX_RATE_LIMIT_WAIT_MS) {
+            rateLimitRetried = true;
+            await new Promise(resolve => setTimeout(resolve, delay * 1000));
+            continue;
+          }
+          throw error;
+        }
+      }
+    } catch (error) {
+      console.warn(`[telegram] delivery_failed confirmed_chunks=${deliveredChunks} total_chunks=${chunks.length}`);
+      report('failed');
+      throw new DeliveryError(deliveredChunks, chunks.length, error);
     }
+    deliveredChunks++;
+    report('sent');
   }
 }
