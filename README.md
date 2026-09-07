@@ -134,10 +134,11 @@ npm run evaluate:effort:production
 ```
 
 It retains the fixture-only Hevy client and isolated scratch state, but uses
-the production limits of 16,000 output tokens and 10 tool iterations. It
-reserves up to $125 before it starts. A passing campaign may recommend
-`medium` when every guardrail passes, one performance measure improves by at
-least 15%, and the other measure does not regress by more than 5%.
+the production limits of 16,000 output tokens and 10 tool iterations. The
+command has a hard $25 reservation ceiling, so it runs one paired pass across
+the four scenarios. It is a production-limit smoke test only: it cannot
+recommend a production effort change because the five-repetition promotion
+gate requires more budget.
 
 ### 2. Run the Telegram bot (foreground)
 

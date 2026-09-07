@@ -197,11 +197,14 @@ test('production dry-run evaluator launches isolated workers and emits a parseab
     assert.equal(summary.passed, 8);
     assert.equal(summary.failed, 0);
     assert.equal(summary.promotionEligible, false);
-    assert.equal(summary.budgetUsd, 125);
+    assert.equal(summary.budgetUsd, 25);
     const artifact = JSON.parse(fs.readFileSync(summary.artifactPath, 'utf8')) as {
       results: Array<{ dryRun?: boolean; effort: string }>;
       comparison: { high: { cases: number }; medium: { cases: number } };
+      budget: { limitUsd: number; reservedUsd: number };
     };
+    assert.equal(artifact.budget.limitUsd, 25);
+    assert.ok(artifact.budget.reservedUsd <= artifact.budget.limitUsd);
     assert.equal(artifact.results.length, 8);
     assert.ok(artifact.results.every((result) => result.dryRun));
     assert.deepEqual(artifact.results.map((result) => result.effort), ['high', 'medium', 'high', 'medium', 'high', 'medium', 'high', 'medium']);
