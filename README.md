@@ -107,18 +107,23 @@ Opens an interactive REPL that talks to Claude with the full tool loop — same 
 ### Effort evaluation
 
 To compare the production `high` reasoning effort with the `medium` candidate,
-run the fixed guardrail scenarios in independent scratch sessions:
+run the paired fixed guardrail campaign:
 
 ```bash
-npm run evaluate:effort -- high 5
-npm run evaluate:effort -- medium 5
+npm run evaluate:effort:pair
 ```
 
-Each run leaves production SQLite state and Hevy routines untouched. It prints
-per-call latency, token/cache measurements, and deterministic pass/fail checks
-without printing the coaching responses. Keep `high` unless `medium` passes
-every guardrail and produces at least a 15% improvement in the chosen latency
-or cost measure.
+Each scenario/repetition runs in its own seeded temporary SQLite database with
+a fixture Hevy client, so it never reads or writes production SQLite state or
+Hevy. The concise terminal summary reports total elapsed time, modeled cost,
+and deterministic pass/fail counts; the owner-readable temporary JSON artifact
+contains per-call latency, token/cache measurements, tool inputs, and coaching
+responses. The campaign reserves against a $25 ceiling before each model call;
+it stops inconclusively if the next bounded worker could exceed that budget.
+Because those bounds are lower than production's output and tool-loop limits,
+this is a screening benchmark and cannot change the production effort setting.
+`npm run evaluate:effort -- high 1 --dry-run` is a no-model worker-isolation
+smoke test and cannot support a screening decision.
 
 ### 2. Run the Telegram bot (foreground)
 

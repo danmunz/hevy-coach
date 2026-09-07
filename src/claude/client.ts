@@ -99,11 +99,29 @@ export interface ChatOptions {
   hevyClient?: HevyToolClient;
   /** Captures full tool inputs/results only for an explicit evaluation caller. */
   onToolCall?: (metrics: ToolCallMetrics) => void;
+  /** Evaluation-only cap; production continues to use the module default. */
+  maxOutputTokens?: number;
+  /** Evaluation-only cap; production continues to use the module default. */
+  maxToolIterations?: number;
+  /** Reject an evaluation request before it can exceed its reserved input size. */
+  maxRequestBytes?: number;
 }
 
 function throwIfDeadlineExpired(deadlineAt: number | undefined): void {
   if (deadlineAt != null && Date.now() >= deadlineAt) {
     throw new TurnDeadlineError();
+  }
+}
+
+function assertRequestSize(
+  maxRequestBytes: number | undefined,
+  system: Anthropic.MessageCreateParams['system'],
+  messages: Anthropic.MessageParam[],
+): void {
+  if (maxRequestBytes == null) return;
+  const bytes = Buffer.byteLength(JSON.stringify({ system, messages, tools: TOOLS }));
+  if (bytes > maxRequestBytes) {
+    throw new Error(`Evaluation request is ${bytes} bytes, above its ${maxRequestBytes}-byte input budget.`);
   }
 }
 
@@ -137,6 +155,8 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
 
   const model = process.env.CLAUDE_MODEL || 'claude-sonnet-5';
   const effort = options.effort ?? 'high';
+  const maxOutputTokens = options.maxOutputTokens ?? MAX_OUTPUT_TOKENS;
+  const maxToolIterations = options.maxToolIterations ?? MAX_TOOL_ITERATIONS;
 
   // Build the messages array: prior history + current user message (not yet persisted).
   // Both messages are stored AFTER Claude responds successfully to avoid
@@ -156,10 +176,11 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
   let iterations = 0;
   const preToolText: string[] = [];
 
-  while (iterations < MAX_TOOL_ITERATIONS) {
+  while (iterations < maxToolIterations) {
     iterations++;
 
     throwIfDeadlineExpired(options.deadlineAt);
+    assertRequestSize(options.maxRequestBytes, systemPrompt, messages);
     options.onProgress?.('calling_model');
     console.log(`[claude] Calling model=${model} effort=${effort} messages=${messages.length} iteration=${iterations}`);
     const iterationStart = Date.now();
@@ -171,7 +192,7 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
     try {
       response = await anthropic.messages.create({
         model,
-        max_tokens: MAX_OUTPUT_TOKENS,
+        max_tokens: maxOutputTokens,
         system: systemPrompt,
         messages,
         tools: TOOLS,
@@ -206,25 +227,6 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
         `ms=${Date.now() - iterationStart}`,
     );
 
-    // max_tokens means the turn was cut off mid-thought — often partway through
-    // a tool call, which leaves no text and an unusable partial block. Treating
-    // it as a normal finish silently swallows the truncation.
-    if (response.stop_reason === 'max_tokens') {
-      console.error(
-        `[claude] Response truncated at the ${MAX_OUTPUT_TOKENS}-token cap ` +
-          `on iteration ${iterations}; discarding the partial turn.`,
-      );
-      const truncatedNotice =
-        "That answer ran long and got cut off before I could finish. " +
-        'Ask me again — I\'ll keep it tighter.';
-      if (persist) {
-        addMessage('user', userMessage);
-        addMessage('assistant', truncatedNotice);
-      }
-      options.onProgress?.('complete');
-      return truncatedNotice;
-    }
-
     // Check if Claude wants to use tools
     const toolUseBlocks = response.content.filter(
       (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
@@ -239,6 +241,26 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
       stopReason: response.stop_reason,
       toolCalls: toolUseBlocks.length,
     });
+
+    // max_tokens means the turn was cut off mid-thought — often partway through
+    // a tool call, which leaves no text and an unusable partial block. The
+    // metrics callback intentionally runs first so evaluators retain the paid
+    // call and can reject a truncation deterministically.
+    if (response.stop_reason === 'max_tokens') {
+      console.error(
+        `[claude] Response truncated at the ${maxOutputTokens}-token cap ` +
+          `on iteration ${iterations}; discarding the partial turn.`,
+      );
+      const truncatedNotice =
+        "That answer ran long and got cut off before I could finish. " +
+        'Ask me again — I\'ll keep it tighter.';
+      if (persist) {
+        addMessage('user', userMessage);
+        addMessage('assistant', truncatedNotice);
+      }
+      options.onProgress?.('complete');
+      return truncatedNotice;
+    }
 
     if (response.stop_reason !== 'tool_use') {
       // No more tool calls. Use this iteration's text; only when it is empty

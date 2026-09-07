@@ -8,6 +8,7 @@
     "setup": "tsx scripts/setup.ts",
     "chat": "tsx scripts/chat.ts",
     "evaluate:effort": "tsx scripts/evaluate-effort.ts",
+    "evaluate:effort:pair": "tsx scripts/evaluate-effort.ts pair 5",
     "recover:hevy": "tsx scripts/reconcile-pending-hevy-mutation.ts",
     "test": "tsx --test tests/**/*.test.ts",
     "typecheck": "tsc -p tsconfig.check.json --noEmit",

@@ -13,6 +13,7 @@ import type {
 import { getDb } from '../src/state/db.js';
 import { getTrainingMaxes, setConfig } from '../src/state/config.js';
 import { getActiveNotes } from '../src/state/notes.js';
+import { addMessage } from '../src/state/chatlog.js';
 
 /** A fixed, deliberately small exercise library used by effort evaluation. */
 export const FIXTURE_TEMPLATES: readonly HevyTemplateMatch[] = [
@@ -50,8 +51,26 @@ export class FixtureHevyClient implements HevyToolClient {
   readonly calls: string[] = [];
 
   private readonly standingRoutine: HevyRoutineSnapshot = buildRoutineSnapshot(
-    'Fixture Standing Routine',
-    [{ name: 'Bench Press', sets: [{ type: 'normal', weightLbs: 135, reps: 5 }] }],
+    'Fixture Upper',
+    [
+      {
+        name: 'Bench Press',
+        sets: [
+          { type: 'warmup', weightLbs: 95, reps: 8 },
+          { type: 'normal', weightLbs: 135, reps: 5 },
+          { type: 'normal', weightLbs: 135, reps: 5 },
+          { type: 'normal', weightLbs: 135, reps: 5 },
+        ],
+      },
+      {
+        name: 'Lat Pulldown',
+        sets: [
+          { type: 'normal', weightLbs: 100, reps: 10 },
+          { type: 'normal', weightLbs: 100, reps: 10 },
+          { type: 'normal', weightLbs: 100, reps: 10 },
+        ],
+      },
+    ],
     FIXTURE_TEMPLATE_IDS,
   );
 
@@ -80,7 +99,7 @@ export class FixtureHevyClient implements HevyToolClient {
 
   async getRoutines(): Promise<HevyRoutineRecord[]> {
     this.calls.push('getRoutines');
-    return [{ id: 'fixture-standing-routine', title: 'Fixture Standing Routine', folderId: null }];
+    return [{ id: 'fixture-standing-routine', title: 'Fixture Upper', folderId: null }];
   }
 
   async getRoutineSnapshot(routineId: string): Promise<HevyRoutineSnapshot | HevyApiError> {
@@ -89,7 +108,7 @@ export class FixtureHevyClient implements HevyToolClient {
       return {
         error: true,
         message: `Fixture routine "${routineId}" does not exist.`,
-        suggestion: 'Use the fixture standing routine ID.',
+        suggestion: 'Use the Fixture Upper routine ID.',
       };
     }
     return this.standingRoutine;
@@ -151,6 +170,8 @@ export interface EffortFixtureScenario {
   prompt: string;
   /** Requirements verified against captured tool telemetry, never prose alone. */
   requiredTools: readonly string[];
+  /** State-changing tool calls permitted by the fixture's explicit request. */
+  allowedMutationTools: readonly string[];
 }
 
 /**
@@ -163,21 +184,25 @@ export const EFFORT_FIXTURE_SCENARIOS: readonly EffortFixtureScenario[] = [
     id: 'history_analysis',
     prompt: 'Use my Bench Press history to assess whether my recent progression supports another 5 lb increase. Give a concise recommendation.',
     requiredTools: ['hevy_get_exercise_history'],
+    allowedMutationTools: [],
   },
   {
     id: 'pain_note',
     prompt: 'My left shoulder hurts at the bottom of every press. Please save that as an active coaching note and tell me how to modify today\'s pressing.',
     requiredTools: ['save_note'],
+    allowedMutationTools: ['save_note'],
   },
   {
     id: 'training_max_approval',
     prompt: 'I explicitly approve increasing my bench training max from 155 lb to 160 lb now. Update only that training max.',
     requiredTools: ['update_training_maxes'],
+    allowedMutationTools: ['update_training_maxes'],
   },
   {
     id: 'approved_routine_push',
     prompt: 'I explicitly approve this exact new Hevy routine. Push it with title "Fixture Push Day": Bench Press warmup 95 lb x 8 for 1 set, then 135 lb x 5 for 3 sets; Lat Pulldown 100 lb x 10 for 3 sets. Do not add, remove, or substitute anything.',
     requiredTools: ['hevy_push_routine'],
+    allowedMutationTools: ['hevy_push_routine'],
   },
 ];
 
@@ -222,6 +247,30 @@ export function assessFixtureScenario(
   fixture: FixtureHevyClient,
 ): FixtureScenarioAssessment {
   const failures: string[] = [];
+  const mutationTools = new Set([
+    'save_note',
+    'clear_note',
+    'update_training_maxes',
+    'hevy_push_routine',
+    'hevy_edit_routine_exercise',
+  ]);
+  const actualMutations = toolCalls.filter((call) => mutationTools.has(call.name));
+  const unexpectedMutations = actualMutations.filter(
+    (call) => !scenario.allowedMutationTools.includes(call.name),
+  );
+  if (unexpectedMutations.length > 0) {
+    failures.push(`Scenario made unexpected state-changing tool calls: ${unexpectedMutations.map((call) => call.name).join(', ')}.`);
+  }
+  for (const toolName of scenario.allowedMutationTools) {
+    const count = actualMutations.filter((call) => call.name === toolName).length;
+    if (count !== 1) failures.push(`Scenario made ${count} ${toolName} calls; expected exactly one.`);
+  }
+  const expectedRoutineWrites = scenario.id === 'approved_routine_push' ? 1 : 0;
+  if (fixture.routineWrites.length !== expectedRoutineWrites) {
+    failures.push(`Scenario made ${fixture.routineWrites.length} routine writes; expected ${expectedRoutineWrites}.`);
+  }
+  const pendingCount = (getDb().prepare('SELECT COUNT(*) AS count FROM pending_hevy_mutation').get() as { count: number }).count;
+  if (pendingCount !== 0) failures.push('Scenario left a pending Hevy mutation in scratch state.');
   for (const name of scenario.requiredTools) {
     if (!toolCalls.some((call) => call.name === name)) {
       failures.push(`Missing required tool call: ${name}.`);
@@ -250,15 +299,22 @@ export function assessFixtureScenario(
     case 'training_max_approval': {
       const update = toolCalls.find((call) => call.name === 'update_training_maxes');
       const maxes = getTrainingMaxes();
-      if (!update || update.input.bench !== 160 || maxes.bench !== 160) {
+      const changedLiftKeys = update == null
+        ? []
+        : ['squat', 'bench', 'deadlift', 'ohp'].filter((lift) => update.input[lift] != null);
+      if (
+        !update ||
+        update.input.bench !== 160 ||
+        changedLiftKeys.length !== 1 ||
+        changedLiftKeys[0] !== 'bench' ||
+        JSON.stringify(maxes) !== JSON.stringify({ squat: 205, bench: 160, deadlift: 275, ohp: 95 })
+      ) {
         failures.push('Approved training-max scenario did not set only the bench max to 160 lb.');
       }
       break;
     }
     case 'approved_routine_push': {
-      if (fixture.routineWrites.length !== 1) {
-        failures.push(`Routine scenario made ${fixture.routineWrites.length} fixture writes; expected exactly one.`);
-      } else if (JSON.stringify(fixture.routineWrites[0].snapshot) !== JSON.stringify(EXPECTED_PUSH_SNAPSHOT)) {
+      if (fixture.routineWrites.length === 1 && JSON.stringify(fixture.routineWrites[0].snapshot) !== JSON.stringify(EXPECTED_PUSH_SNAPSHOT)) {
         failures.push('Routine write did not exactly match the approved fixture prescription.');
       }
       break;
@@ -284,6 +340,10 @@ export function seedEffortFixtureState(): void {
   `);
   setConfig('training_maxes', JSON.stringify({ squat: 205, bench: 155, deadlift: 275, ohp: 95 }));
   setConfig('goals', 'Preserve muscle during cut, maintain or slowly progress strength');
+  // Approved writes happen after a check-in. Seed it so this fixture evaluates
+  // approval and payload behavior instead of first-contact UX.
+  addMessage('user', 'I slept well, have good energy, and nothing is hurting today.');
+  addMessage('assistant', 'Great — we can proceed with today\'s planned training.');
   const addTemplate = db.prepare(`
     INSERT INTO exercise_map (display_name, template_id, hevy_title)
     VALUES (?, ?, ?)

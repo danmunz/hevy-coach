@@ -17,9 +17,9 @@ was made.
 
 ## Gate status
 
-**Fixture evaluation in progress.** Do not change the production effort from
-`high` based on the preliminary sample below. A controlled fixture-backed
-matrix must complete before promotion.
+**Fixture evaluation is ready.** Do not change the production effort from
+`high` based on the preliminary sample below. The controlled fixture-backed
+matrix still needs to complete before promotion.
 
 ## Preliminary live-read-only sample
 
@@ -44,14 +44,16 @@ the complete promotion gate.
 
 ## Required controlled run
 
-Once the fixture evaluator is complete, run:
+Once the fixture evaluator is complete, run its paired campaign:
 
 ```bash
-npm run evaluate:effort -- high 5
-npm run evaluate:effort -- medium 5
+npm run evaluate:effort:pair
 ```
 
-Promote `medium` only if every fixed scenario passes every repetition and it
-improves the selected latency or model-cost measure by at least 15%, without an
-error or tool-behavior regression. Retain generated result artifacts outside
-Git when they include personal coaching context.
+The paired campaign uses one $25 reservation ledger across both efforts. It is
+a screening benchmark: its bounded output and tool-loop limits make results
+ineligible to change the production setting. A later production-equivalent
+promotion run must have an explicit budget and pass every fixed scenario, with
+at least a 15% latency or equal-scenario median cost improvement and no more
+than a 5% regression in the other measure. Retain generated result artifacts
+outside Git when they include personal coaching context.
