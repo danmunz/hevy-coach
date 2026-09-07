@@ -106,3 +106,53 @@ High also reached the screening output cap in several cases. The corrected run
 therefore remains screening evidence only. It shows a strong medium-effort
 speed and cost signal, but it cannot change the production setting until a
 production-equivalent campaign passes every guardrail.
+
+## Production-limit smoke test
+
+The production-limit smoke test ran on 2026-09-07. It used one repetition of
+four fixture scenarios at each effort. Each case used a new SQLite database.
+The fixture Hevy client handled every Hevy call. The campaign made no live
+Hevy API write.
+
+The runner used the production limits. It allowed 16,000 output tokens and
+ten tool iterations for each model call. It stopped before a ninth worker.
+
+| Budget measure | Value |
+| --- | ---: |
+| Hard campaign limit | $25.000000 |
+| Reserved before calls | $24.320000 |
+| Modeled model cost | $0.240869 |
+| Completed cases | 8 / 8 |
+| Failed cases | 0 / 8 |
+| Total case time | 189.670 s |
+
+| Measure | High | Medium | Change |
+| --- | ---: | ---: | --- |
+| Passed cases | 4 / 4 | 4 / 4 | No quality failure |
+| Median case time | 25.052 s | 20.277 s | Medium was 19.1% faster |
+| Median modeled cost | $0.032934 | $0.027657 | Medium cost 16.0% less |
+| Total modeled cost | $0.131053 | $0.109817 | Medium cost $0.021236 less |
+
+| Scenario | High time | Medium time | High cost | Medium cost | Required result |
+| --- | ---: | ---: | ---: | ---: | --- |
+| History analysis | 17.664 s | 16.820 s | $0.032033 | $0.031959 | Read workout and exercise history. No mutation. |
+| Pain note | 26.378 s | 23.686 s | $0.024434 | $0.023356 | Save the pain note. Do not prescribe Bench. |
+| Training-max approval | 37.938 s | 16.867 s | $0.040751 | $0.021505 | Apply the approved training-max change once. |
+| Approved routine push | 23.725 s | 26.592 s | $0.033835 | $0.032997 | Send one exact fixture routine update. |
+
+The test recorded 20 model calls. No call reached the output limit. No call
+reached the tool-iteration limit. All scenario assertions passed. The routine
+scenario made one fixture update for each effort. The updates matched the
+approved routine payload.
+
+Both efforts created one prompt cache entry. Later model calls read the cache.
+The evaluator reports a mixed cache result because the first call for each
+effort created an entry.
+
+**Decision: retain `high`.** The smoke test meets the measured speed and cost
+thresholds. It does not meet the five-repetition promotion requirement. Do not
+change the production effort setting from this result alone.
+
+The private result artifact is outside Git. It contains response text and tool
+inputs. Its local path is
+`/var/folders/36/nh_213gx7cg0_x5r50mq3skm0000gn/T/hevy-coach-effort-results-ceeK19/evaluation.json`.
