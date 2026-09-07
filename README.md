@@ -459,3 +459,29 @@ It also rebuilds that cache on the first scan at least one hour after the last
 full refresh. This is a recovery policy, not a claim about Hevy event retention.
 Failed refreshes preserve the previous data and checkpoint. A later scan retries.
 Workout dates use numeric timestamps, so different timezone offsets sort correctly.
+
+### Checked context and delivery limits
+
+The workout and routine read tools accept `refresh: true`. This performs a new
+read instead of reusing checked data. A failed refresh marks the data unavailable.
+Workout counts must be integers from one through ten. The default remains five.
+The routine read tool also accepts `routine_id` to return complete routine sets
+in pounds. This supports details omitted from automatic context.
+
+Automatic workout excerpts have a 6,000-byte content limit. Routine excerpts
+have a 3,000-byte content limit. Section markers add a small fixed overhead.
+An incomplete excerpt says that details are omitted. Full tool results remain
+available. These are byte limits, not token limits or measured cost savings.
+Successful routine writes invalidate routine context. Successful note and
+training-max changes rebuild local context without discarding workout data.
+
+The turn queue now includes answer delivery. The answer must finish within the
+remaining 75-second turn budget and a separate 30-second delivery limit.
+Retry waits count toward those limits. A failure notice has at most five extra
+seconds. Slow delivery can therefore reduce the time available to queued turns.
+
+A timeout requests transport cancellation. Cancellation cannot retract a message
+that Telegram already accepted. The bot does not resend an uncertain message.
+A delivery failure notice reports confirmed chunks and warns that saved changes
+may already be complete. Error logs contain selected categories and counts,
+not request payloads or complete nested error objects.

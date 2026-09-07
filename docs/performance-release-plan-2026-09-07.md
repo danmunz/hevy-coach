@@ -8,72 +8,48 @@ No further paid model tests are authorized. Production effort remains `high`.
 
 | Sprint | Status | Remaining gate |
 | --- | --- | --- |
-| 1. Measurement and storage | Implemented and locally verified. | Correct transport error logging under S5-04. Verify remote CI at release. |
+| 1. Measurement and storage | Implemented and locally verified. | S5-04 is closed. Verify remote CI at release. |
 | 2. Hevy reads | Implemented and locally verified. | Equipment choices are resolved. No separate open implementation task. |
-| 3. Workout freshness | Implemented. Local gate open. | Verify scheduler, cache recovery, and event assumptions. |
-| 4. Coaching context | Implemented. Local gate open. | Fix explicit refresh, input validation, and excess invalidation. Bound automatic context. |
-| 5. Telegram delivery | Implemented. Local gate open. | Fix ordering, delivery deadlines, failure reporting, and error logs. |
+| 3. Workout freshness | Local gate passed. | Observe recovery during normal use. |
+| 4. Coaching context | Local gate passed. | Measure actual context cost and timing during normal use. |
+| 5. Telegram delivery | Local gate passed. | Verify the deployed transport during normal use. |
 | 6. Production verification | Deferred until the combined release is ready. | Restart, verify CI, and observe normal use. |
 
-The current 59 tests pass. Both TypeScript checks pass. These results do not close the new review findings.
-No production speed improvement is established.
+The [closure record](review-sprint-closure-2026-09-07.md) documents the fixes, independent reviews, and local verification.
+All 90 local tests and both TypeScript checks pass.
+Production verification remains open. No production speed improvement is established.
 
-## Sprint 3 — Complete freshness verification
+## Sprint 3 — Local gate passed
 
-Address S3-01 through S3-03 before closing this sprint.
+S3-01 through S3-03 are closed locally.
+Controlled tests cover scheduling, failures, restart recovery, and the latest-ten boundary.
+Dates use numeric timestamps. Failed refill and checkpoint writes preserve the previous cache.
+The bot rebuilds the latest ten on startup and at least hourly when scans run successfully.
 
-1. Add deterministic scheduler tests for disabled polling, backoff, recovery, and shutdown.
-2. Test the latest-ten boundary with inserted, edited, and deleted workouts.
-3. Inject a refill failure and a storage failure. Verify unchanged data and checkpoint.
-4. Restart against the temporary database. Verify recovery without lost changes.
-5. Check the Hevy event contract for order and retention. Record the source and any uncertainty.
-6. Compare parsed timestamps. Define a bounded full refresh when incremental recovery is uncertain.
+Hevy documents event order but not retention. Hourly rebuilding is a recovery policy, not an immediate-freshness guarantee.
+The implementation retains one process, one timer, and the existing SQLite store.
 
-Keep the existing single-process timer and SQLite cache. Use temporary databases and mocked Hevy responses for regression tests.
-Do not add a separate cron service, text log, queue service, or database framework.
+## Sprint 4 — Local gate passed
 
-**Exit gate:** Every S3 finding has a passing check or an explicit, tested recovery rule.
-Record the results in the review document. The reviewer must confirm that failed scans cannot advance the checkpoint.
+S4-01 through S4-04 are closed locally.
+Explicit refresh performs a new read. A failed refresh removes the old current-data claim.
+Cached and remote reads validate counts consistently. Successful mutations invalidate only affected data.
+Local note and training-max changes rebuild the volatile prompt suffix.
 
-## Sprint 4 — Correct context reuse
+Automatic workout content is limited to 6,000 bytes. Routine content is limited to 3,000 bytes.
+Incomplete excerpts state their limits. Tools provide complete workout summaries and routine sets.
+Byte limits do not establish token counts or cost savings. The full prompt still includes history and local state.
+The shared deadline remains in force. A delayed context check can consume that budget.
 
-Address S4-01 through S4-04 after the freshness contract is stable.
+## Sprint 5 — Local gate passed
 
-1. Add an explicit refresh option to relevant read tools. Preserve existing default calls.
-2. Replace a snapshot after a successful refresh. Mark a failed refresh as unavailable without calling old data current.
-3. Validate workout counts before choosing the cache or live path.
-4. Invalidate affected data after successful mutations. Preserve unrelated checked data.
-5. Test refresh across model iterations and successful, failed, and blocked mutations.
-6. Measure context size with normal and large local fixtures, including long notes.
-7. Bound automatically inserted context. State the included coverage and provide tools for omitted details.
-8. Test delayed context requests against the shared turn deadline.
+S5-01 through S5-04 are closed locally.
+The existing queue now includes bounded delivery. Tests verify multiple chunks across two replies without interleaving.
+The answer uses the earlier of its remaining turn deadline and 30 seconds. A distinct failure notice has five extra seconds.
+Unknown delivery outcomes never trigger automatic resends. Error logs exclude nested request payloads.
 
-Use the real chat loop with a mocked model transport. Do not buy model evaluations or use live coaching for these tests.
-Keep static instructions above the prompt-cache boundary. Keep config files responsive to edits on the next message.
-
-**Exit gate:** Explicit refresh performs a new read. Cached and live inputs have the same validation.
-Tests must show correct mutation behavior, bounded automatic context, and a stable static prefix.
-Record bytes and estimated tokens separately. Do not present an estimate as billed usage.
-
-## Sprint 5 — Complete delivery integration
-
-Address S5-01 through S5-04 after the context contract is stable.
-
-1. Define delivery ordering and timeout behavior together.
-2. Prefer the existing turn queue through bounded delivery if this preserves the message deadline contract.
-3. Use a small ordered delivery queue only if tests show that the simpler approach blocks coaching unnecessarily.
-4. Bound the complete delivery operation and its network calls. Preserve uncertainty when cancellation cannot confirm non-delivery.
-5. Handle partial and uncertain delivery separately from coaching failure.
-6. Replace complete error logging with selected safe fields.
-7. Test two rapid user turns, a stalled send, retry exhaustion, partial delivery, and a successful write followed by delivery failure.
-8. Verify text preservation and chunk order through the handler, using mocked Telegram calls.
-
-Document the selected delivery deadline before implementation. Include retry waits in that deadline.
-Never retry an uncertain send automatically. Do not add a persistent outbox or resend command for this sprint.
-
-**Exit gate:** Replies do not interleave. A stalled send cannot block later work indefinitely.
-Failure notices must reflect confirmed outcomes. Logs must exclude message bodies and credentials.
-The reviewer must verify these cases at the handler boundary, not only in the chunk helper.
+Cancellation cannot retract a message already accepted by Telegram. Delivery notices distinguish confirmed parts from uncertain outcomes.
+The implementation adds no persistent outbox, queue service, or resend command.
 
 ## Ownership and documentation
 
@@ -89,7 +65,7 @@ Run the complete suite before each sprint closes. A passing test count alone doe
 
 ## Deferred production gate
 
-Complete sprints 3–5 locally before restarting the combined release.
+Sprints 3–5 passed their local gates. The combined release is ready for the deferred production check.
 Verify the remote CI result. Record the deployed revision and the previous revision for rollback.
 Back up SQLite before deployment. Preserve pending mutation records during any recovery.
 
