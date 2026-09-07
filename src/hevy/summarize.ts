@@ -1,4 +1,11 @@
-import type { HevyCompletedWorkout, HevyCompletedWorkoutExercise } from "./types.js";
+import type {
+  HevyCompletedWorkout,
+  CachedWorkout,
+  CachedWorkoutSet,
+  HevyCompletedWorkoutExercise,
+  HevyCompletedWorkoutSet,
+  HevyExerciseHistoryEntry,
+} from "./types.js";
 import { kilogramsToPounds } from "./utils.js";
 import { TIMEZONE } from "../util/timezone.js";
 
@@ -31,44 +38,35 @@ function formatDate(iso: string | undefined): string {
  * Returns a compact string like "205x5" (weight in lbs x reps).
  * For bodyweight or zero-weight exercises, shows just reps.
  */
-function topSetSummary(exercise: HevyCompletedWorkoutExercise): string {
-  const normalSets = exercise.sets.filter(
-    (s) => s.type === "normal" || s.type === undefined,
-  );
-  const setsToCheck = normalSets.length > 0 ? normalSets : exercise.sets;
+function setSummary(set: HevyCompletedWorkoutSet | HevyExerciseHistoryEntry | CachedWorkoutSet): string {
+  const weightLbs = "weightLbs" in set ? Math.round(set.weightLbs ?? 0)
+    : "weightKg" in set ? kilogramsToPounds(set.weightKg ?? 0) : 0;
+  const reps = set.reps ?? 0;
+  const core = weightLbs > 0
+    ? `${weightLbs}x${reps}`
+    : set.durationSeconds && set.durationSeconds > 0
+      ? `${set.durationSeconds}s`
+      : set.distanceMeters && set.distanceMeters > 0
+        ? `${Math.round(set.distanceMeters)}m`
+        : `BWx${reps}`;
+  const rpe = set.rpe == null ? "" : `@${set.rpe}`;
+  const setType =
+    (set as HevyExerciseHistoryEntry).setType ??
+    (set as HevyCompletedWorkoutSet).type;
+  return `${setType && setType !== "normal" ? `${setType} ` : ""}${core}${rpe}`;
+}
 
-  if (setsToCheck.length === 0) return "no sets";
-
-  let bestSet = setsToCheck[0];
-  for (const set of setsToCheck) {
-    const currentWeight = set.weightKg ?? 0;
-    const bestWeight = bestSet.weightKg ?? 0;
-    if (currentWeight > bestWeight) {
-      bestSet = set;
-    }
+/** Compactly preserves every performed set, grouping only adjacent equals. */
+function setGroups(sets: Array<HevyCompletedWorkoutSet | HevyExerciseHistoryEntry | CachedWorkoutSet>): string {
+  if (sets.length === 0) return "no sets";
+  const groups: Array<{ summary: string; count: number }> = [];
+  for (const set of sets) {
+    const summary = setSummary(set);
+    const previous = groups.at(-1);
+    if (previous?.summary === summary) previous.count++;
+    else groups.push({ summary, count: 1 });
   }
-
-  const weightKg = bestSet.weightKg ?? 0;
-  const reps = bestSet.reps ?? 0;
-
-  if (weightKg > 0) {
-    const weightLbs = kilogramsToPounds(weightKg);
-    return `${weightLbs}x${reps}`;
-  }
-
-  // Duration-based exercise (e.g. planks)
-  if (bestSet.durationSeconds && bestSet.durationSeconds > 0) {
-    return `${bestSet.durationSeconds}s`;
-  }
-
-  // Distance-based exercise (e.g. running)
-  if (bestSet.distanceMeters && bestSet.distanceMeters > 0) {
-    const distanceM = Math.round(bestSet.distanceMeters);
-    return `${distanceM}m`;
-  }
-
-  // Bodyweight or zero-weight
-  return `BWx${reps}`;
+  return groups.map((group) => group.count > 1 ? `${group.count}x${group.summary}` : group.summary).join(", ");
 }
 
 // ---------------------------------------------------------------------------
@@ -78,8 +76,8 @@ function topSetSummary(exercise: HevyCompletedWorkoutExercise): string {
 /**
  * Produces a compact text summary of recent workouts.
  *
- * Each workout is one line showing date, title, and top set per exercise.
- * Targets ~200 tokens per 5 workouts.
+ * Each workout is one line showing date, title, and all performed set groups
+ * per exercise. It intentionally retains volume and non-normal set types.
  *
  * Example output:
  * ```
@@ -88,7 +86,7 @@ function topSetSummary(exercise: HevyCompletedWorkoutExercise): string {
  * - Mon Sep 1: Bench Day -- Bench: 155x7, OHP: 65x10, Face Pull: 30x15
  * ```
  */
-export function summarizeWorkouts(workouts: HevyCompletedWorkout[]): string {
+export function summarizeWorkouts(workouts: Array<HevyCompletedWorkout | CachedWorkout>): string {
   if (workouts.length === 0) {
     return "No recent workouts found.";
   }
@@ -98,7 +96,7 @@ export function summarizeWorkouts(workouts: HevyCompletedWorkout[]): string {
     const title = workout.title || "Untitled";
 
     const exerciseSummaries = workout.exercises.map(
-      (ex) => `${ex.title}: ${topSetSummary(ex)}`,
+      (ex) => `${ex.title}${ex.exerciseTemplateId ? ` [${ex.exerciseTemplateId}]` : ""}: ${setGroups(ex.sets)}${ex.notes ? ` (notes: ${ex.notes})` : ""}`,
     );
 
     const exerciseText =
@@ -106,7 +104,7 @@ export function summarizeWorkouts(workouts: HevyCompletedWorkout[]): string {
         ? exerciseSummaries.join(", ")
         : "no exercises";
 
-    return `- ${date}: ${title} -- ${exerciseText}`;
+    return `- ${date}: ${title} -- ${exerciseText}${workout.description ? ` (notes: ${workout.description})` : ""}`;
   });
 
   return `Recent workouts:\n${lines.join("\n")}`;
@@ -126,29 +124,26 @@ export function summarizeWorkouts(workouts: HevyCompletedWorkout[]): string {
  * ```
  */
 export function summarizeExerciseHistory(
-  workouts: HevyCompletedWorkout[],
+  entries: HevyExerciseHistoryEntry[],
   exerciseName: string,
+  coverage: { startDate: string; endDate: string },
 ): string {
-  const normalizedName = exerciseName.trim().toLowerCase();
-
-  const entries: { date: string; summary: string }[] = [];
-
-  for (const workout of workouts) {
-    for (const exercise of workout.exercises) {
-      if (exercise.title.trim().toLowerCase() === normalizedName) {
-        entries.push({
-          date: formatDate(workout.startTime),
-          summary: topSetSummary(exercise),
-        });
-        break; // Only the first match per workout
-      }
-    }
+  const workouts = new Map<string, { date?: string; sets: HevyExerciseHistoryEntry[] }>();
+  for (const entry of entries) {
+    const key = `${entry.workoutId}:${entry.exerciseTemplateId}`;
+    const workout = workouts.get(key) ?? { date: entry.workoutStartTime, sets: [] };
+    workout.sets.push(entry);
+    workouts.set(key, workout);
   }
-
-  if (entries.length === 0) {
-    return `No history found for "${exerciseName}".`;
+  if (workouts.size === 0) {
+    return `No history found for "${exerciseName}" from ${coverage.startDate} through ${coverage.endDate}.`;
   }
-
-  const lines = entries.map((e) => `- ${e.date}: ${e.summary}`);
-  return `${exerciseName} history (last ${entries.length} sessions):\n${lines.join("\n")}`;
+  const lines = [...workouts.values()]
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+    .map((workout) => `- ${formatDate(workout.date)}: ${setGroups(workout.sets)}`);
+  const dates = entries.map((entry) => entry.workoutStartTime).filter((date): date is string => date != null).sort();
+  const returnedCoverage = dates.length > 0
+    ? `Returned dates: ${dates[0]} through ${dates.at(-1)}.`
+    : "Returned dates unavailable.";
+  return `${exerciseName} history (${coverage.startDate} through ${coverage.endDate}; ${workouts.size} sessions):\n${returnedCoverage}\n${lines.join("\n")}`;
 }

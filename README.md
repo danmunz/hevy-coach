@@ -82,13 +82,14 @@ npm run chat
 | `AUTHORIZED_CHAT_ID` | Yes | Your Telegram chat ID — only this user can talk to the bot |
 | `CLAUDE_MODEL` | No | Claude model to use (default: `claude-sonnet-5`) |
 | `TIMEZONE` | No | Your timezone for local time display (default: `America/New_York`) |
+| `HEVY_SYNC_INTERVAL_SECONDS` | No | Background workout check interval in seconds (default: `300`). Set to `0` to disable background checks. Each coaching turn still checks Hevy. |
 
 ### What `npm run setup` does
 
 1. Creates `data/hevy-coach.db` (SQLite, WAL mode) with tables for chat history, config, notes, and exercise mappings
 2. Seeds default training maxes and goals from `config/defaults.json`
 3. Verifies your Telegram bot token, Anthropic API key, and Hevy API key are valid
-4. Fetches all ~300 exercise templates from Hevy (3-4 API calls) and resolves the 21 pinned exercises to template IDs
+4. Fetches the exercise template catalog from Hevy and resolves the configured exercise pins to template IDs
 
 If any API verification fails, setup tells you which one and stops. Fix the key in `.env` and re-run — setup is idempotent.
 
@@ -102,7 +103,7 @@ After setup completes, you have three ways to run the bot. Start with the CLI to
 npm run chat
 ```
 
-Opens an interactive REPL that talks to Claude with the full tool loop — same brain as the Telegram bot, just in your terminal. Type "morning" and verify the coach responds, calls Hevy tools, and can push a routine. Useful for testing prompt changes without waiting for Telegram round-trips.
+Opens an interactive REPL that talks to Claude with the full tool loop — same brain as the Telegram bot, just in your terminal. It starts from a temporary SQLite backup, so chat history, notes, and training-max updates can be exercised without changing the production database. It can make live Hevy **read** calls, but blocks all Hevy routine writes. The temporary state is deleted when the REPL exits.
 
 ### 2. Run the Telegram bot (foreground)
 
@@ -128,7 +129,7 @@ npm run pm2:start
 # View logs (streaming, Ctrl+C to stop watching)
 npm run pm2:logs
 
-# Restart after code or config changes
+# Restart after code or environment changes
 npm run pm2:restart
 
 # Stop the bot
@@ -147,6 +148,8 @@ What pm2 adds:
 
 The pm2 config lives in `ecosystem.config.cjs`. The `cwd` path in that file is hardcoded to the project directory — if you move the project, update it there.
 
+The host must remain awake for coaching and background checks to run. PM2 does not prevent laptop sleep.
+
 ## Repository structure
 
 ```
@@ -161,7 +164,9 @@ hevy-coach/
 ├── src/
 │   ├── index.ts             # Entry point: Telegram bot setup, auth gate, message handler
 │   ├── telegram/
-│   │   └── client.ts        # HTML sanitization, message splitting, send helpers
+│   │   ├── client.ts        # HTML sanitization, message splitting, send helpers
+│   │   └── handler.ts       # Ordered coaching and delivery
+│   ├── coach/              # Workout synchronization and checked context
 │   ├── claude/
 │   │   ├── client.ts        # Core chat() function: Claude API + tool execution loop
 │   │   ├── context.ts       # System prompt assembly from config files + DB state
@@ -172,12 +177,14 @@ hevy-coach/
 │   │   ├── exercise-pins.ts # Exercise name → Hevy template ID resolution
 │   │   ├── summarize.ts     # Compact workout summaries for Claude's context
 │   │   ├── types.ts         # TypeScript types for Hevy API responses
-│   │   └── utils.ts         # Weight conversion, text normalization, fuzzy matching
+│   │   └── utils.ts         # Weight conversion and text normalization
 │   └── state/
 │       ├── db.ts            # SQLite connection (lazy singleton, WAL mode)
 │       ├── chatlog.ts       # Chat history storage and retrieval
 │       ├── config.ts        # Key-value config (training maxes, goals)
-│       └── notes.ts         # Persistent coaching notes (injuries, preferences)
+│       ├── notes.ts         # Persistent coaching notes (injuries, preferences)
+│       ├── workouts.ts      # Workout cache and synchronization checkpoint
+│       └── routine-state.ts # Confirmed and pending routine writes
 │
 ├── scripts/
 │   ├── setup.ts             # First-run setup (DB, API verification, template cache)
@@ -268,7 +275,7 @@ Initial training maxes and goals, seeded into SQLite on first `npm run setup`. A
 
 ### 6. Exercise pins (`src/hevy/exercise-pins.ts`)
 
-This one *is* in `src/`, but it's a pure data file — a map of exercise display names to Hevy search queries. The setup script resolves each pin to a Hevy template ID so Claude can push routines without searching the API at runtime.
+Edit the `EXERCISE_PINS` map in this file to associate exercise names with Hevy search queries. Setup resolves those queries to template IDs.
 
 If your program uses exercises not in the default pin list (e.g., you do Romanian Deadlifts, Hip Thrusts, or machine exercises), add them here:
 
@@ -279,35 +286,39 @@ If your program uses exercises not in the default pin list (e.g., you do Romania
 
 The `query` is what to search for in Hevy's exercise library. The optional `primaryMuscleGroup` narrows results when the query is ambiguous. After editing, re-run `npm run setup` to resolve the new pins.
 
-If Claude asks for an exercise that isn't pinned, it falls back to fuzzy search at runtime and logs a warning suggesting you add a pin. The bot won't break — it just costs an extra API-call cycle.
+For an unpinned exercise, the bot searches the catalog for a unique exact or word-order match. It rejects uncertain matches instead of substituting equipment.
 
 ### 7. Environment variables (`.env`)
 
-`CLAUDE_MODEL` lets you swap models. `claude-sonnet-5` is the default — fast and cheap (~$0.01-0.03 per conversation). You could use `claude-opus-5` for more nuanced coaching at higher cost.
+`CLAUDE_MODEL` selects the model. The default is `claude-sonnet-5`.
 
 `TIMEZONE` affects the local time shown in the system prompt, which helps the coach know if it's morning, afternoon, or late at night.
+
+Restart the bot after changing `.env`. The Markdown files in `config/` reload on each message.
 
 ## How it works under the hood
 
 1. **You text the bot** on Telegram. The bot only responds to your `AUTHORIZED_CHAT_ID`; all other messages are silently ignored.
 
-2. **System prompt is assembled** from the config markdown files, current training maxes from SQLite, active coaching notes, recent chat history (last 30 messages / 48 hours), and the current local time.
+2. **Hevy context is checked** for workout changes and the standing routine. Background checks also run about every five minutes. Failed checks are marked unavailable.
 
-3. **Claude is called** with 8 tool definitions. Claude decides what to do — typically calling `hevy_get_recent_workouts` to see your history, then responding conversationally.
+3. **Claude receives checked context** with config files, training maxes, notes, recent chat history, and the current time. Static instructions use prompt caching. Tools provide additional details when needed.
 
 4. **Tool loop** runs up to 10 iterations. When Claude calls a tool (e.g., `hevy_push_routine`), the tool executor dispatches it, returns the result, and Claude continues. The loop ends when Claude produces a text response.
 
-5. **Response is sanitized** (HTML tags Telegram doesn't support are stripped, special characters are escaped) and **split into chunks** (~800 chars, on paragraph boundaries) with 400ms delays between messages for natural pacing.
+5. **The response is formatted for Telegram** and split into balanced HTML chunks near 2,000 visible characters. There is no fixed pause between parts.
 
-6. **Chat history is stored** in SQLite after a successful response. Both the user message and assistant response are stored together to prevent database corruption.
+6. **Turns run in order**, including delivery. Each turn has a 75-second budget. Delivery also has a 30-second limit. A failure notice gets up to five extra seconds. Uncertain sends do not retry automatically.
+
+7. **Chat history is stored** in SQLite after a successful response. Both the user message and assistant response are stored together to prevent database corruption.
 
 ### Tools Claude can use
 
 | Tool | What it does |
 |---|---|
 | `hevy_get_recent_workouts` | Fetch and summarize recent completed workouts |
-| `hevy_get_exercise_history` | Get progression history for a specific exercise |
-| `hevy_get_routines` | List saved routines (to check for unfinished ones) |
+| `hevy_get_exercise_history` | Get progression history for a specific exercise over the last 90 days by default, or an explicit date interval |
+| `hevy_get_routines` | List saved routines or read one routine's complete sets |
 | `hevy_push_routine` | Create or update the standing routine in Hevy |
 | `hevy_edit_routine_exercise` | Swap one exercise in the current routine |
 | `save_note` | Save a persistent note (injury, preference, schedule) |
@@ -322,17 +333,19 @@ All persistent state lives in `data/hevy-coach.db` (SQLite, WAL mode):
 - **config** — key-value pairs (training maxes, goals). Updated by Claude via tools.
 - **notes** — coaching notes with soft-delete. Claude saves and clears these autonomously.
 - **exercise_map** — cached exercise name → Hevy template ID mappings. Populated by `npm run setup`.
+- **pending_hevy_mutation** — a routine write whose remote result is unknown. It blocks later routine writes until you inspect and resolve the outcome.
+- **workout_cache / workout_checkpoint** — up to ten recent workouts and the last successful scan time. Full refreshes run at startup and at least hourly when scans succeed.
 
 To reset everything and start fresh, delete `data/hevy-coach.db` and re-run `npm run setup`.
 
 ## Cost
 
-Each conversation (a few back-and-forth messages) typically costs $0.01-0.03 in Claude API usage. A daily morning check-in + workout approval runs about $0.50-1.00/month. The Hevy API is included with Hevy Pro (no per-call charges).
+Claude API usage is billed separately from Hevy Pro. Cost depends on the model, conversation history, output length, and prompt-cache use. Setup verification and CLI chat also call Claude. Background workout checks call Hevy only.
 
 ## Troubleshooting
 
 **Setup hangs or fails on exercise template resolution**
-Check your Hevy API key. The setup fetches all exercise templates in 3-4 API calls; if the key is invalid or rate-limited, it will fail. Wait a minute and retry.
+Check your Hevy API key. Setup fetches the exercise catalog across multiple pages. Invalid keys and rate limits can prevent completion.
 
 **Bot doesn't respond on Telegram**
 Verify `AUTHORIZED_CHAT_ID` matches your actual Telegram chat ID (it's a number, not your username). Check `npm run pm2:logs` for errors.
@@ -341,7 +354,44 @@ Verify `AUTHORIZED_CHAT_ID` matches your actual Telegram chat ID (it's a number,
 Check `config/program.md` — that's where the set/rep schemes and percentage calculations are defined. Also verify your training maxes are correct: they're stored in SQLite after the first setup and managed by Claude thereafter.
 
 **Routine doesn't appear in Hevy**
-Check that your Hevy API key has write access (Pro subscription). Look at the pm2 logs for `[tool]` lines showing what was sent to the API.
+Check your Hevy Pro subscription and API key. Look for `[tool]` outcome entries in the PM2 logs.
 
-**"Something went wrong" on Telegram**
-Usually an HTML parsing error. Check pm2 error logs. The bot tries to fall back to plain text, but edge cases can slip through.
+**The coach says a previous routine write has an unknown outcome**
+Do not resend the workout immediately. Check the standing routine in Hevy first: an interrupted request may have completed remotely. The bot blocks a second routine write to avoid creating a duplicate or overwriting an unknown result. Clear the pending record only after reconciling the intended routine with what is in Hevy.
+
+To reconcile a pending update, the recovery command fetches the routine again
+and clears the block only when its programming fields match the pending payload:
+
+```bash
+npm run recover:hevy
+```
+
+For an interrupted create, first find the candidate routine's ID in Hevy, then
+provide it explicitly:
+
+```bash
+npm run recover:hevy -- --routine-id <id>
+```
+
+The command makes a single read request. It never retries the interrupted write
+and leaves the safety block in place if the remote routine does not match.
+
+**Workout freshness check fails**
+Check for new `[sync] scan_failed` entries in `logs/error.log`. Failed scans preserve the previous cache and checkpoint. Later scans retry.
+
+**A reply is incomplete or times out**
+Check `[delivery]` entries for the number of confirmed parts. A failed reply does not mean a Hevy write failed. Check Hevy before repeating a change request.
+
+## Development
+
+Run the local checks before contributing:
+
+```bash
+npx tsc --noEmit
+npm run typecheck
+npm test
+```
+
+These checks use local fixtures and do not require paid model calls. Logs identify each turn and record context time, model usage, tool outcomes, and delivery progress.
+
+Technical decisions and verification results live in [docs/](docs/). The [performance review](docs/review-sprint-closure-2026-09-07.md) records the synchronization, context, and delivery changes.

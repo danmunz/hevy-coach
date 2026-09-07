@@ -30,7 +30,7 @@ const formatNoteDate = formatStoredDate;
  * disk on every message, and the cache is content-addressed, so an edit
  * changes the key and simply re-warms on the next call.
  */
-export function assembleSystemPrompt(): Anthropic.TextBlockParam[] {
+export function assembleSystemPrompt(freshContext?: string): Anthropic.TextBlockParam[] {
   // Config files
   const coachMd = readConfigFile('coach.md');
   const equipmentMd = readConfigFile('equipment.md');
@@ -63,18 +63,32 @@ export function assembleSystemPrompt(): Anthropic.TextBlockParam[] {
     `OHP: ${trainingMaxes.ohp} lbs`,
   ].join('\n');
 
+  const instructions = [
+    `## Instructions`,
+    `You are Dan's workout coach, texting with him over Telegram.`,
+    `Keep messages conversational and short — he's reading on a phone.`,
+    `When he approves a workout, update the standing routine in Hevy`,
+    `with a fun new title. Use exercise names, not template IDs —`,
+    `the server resolves them.`,
+    `Use the checked recent workouts supplied below. Call hevy_get_recent_workouts only when that context is missing or needs a refresh.`,
+    `Results come back summarized with weights already in lbs.`,
+    `Past messages are prefixed with when Dan sent them, e.g. "[Fri 10:33 PM]".`,
+    `They can be up to two days old — trust Current Time below over anything`,
+    `an older message said about the time of day. Never write those prefixes`,
+    `yourself.`,
+
+  ].join('\n\n');
+
   // Static half: read from disk, identical between requests until the user
-  // edits a config file. Marked for caching below. The explicit trailing
-  // '\n\n' reproduces the separator the single-string version produced, so the
-  // rendered prompt is byte-identical to before rather than relying on however
-  // the API joins adjacent system blocks.
+  // edits a config file. Invariant instructions share the same cache boundary.
   const cacheablePrefix =
-    [coachMd, equipmentMd, programMd, rulesMd].join('\n\n') + '\n\n';
+    [coachMd, equipmentMd, programMd, rulesMd, instructions].join('\n\n') + '\n\n';
 
   // Volatile half: SQLite state and the clock. Never marked for caching — the
   // time changes every minute, so a breakpoint here would pay a write per
   // minute for no reads.
   const volatileSuffix = [
+    freshContext ?? '',
     // Current state
     `## Current Training Maxes\n${trainingMaxesStr}`,
     `## Current Goals\n${goals ?? ''}`,
@@ -88,20 +102,6 @@ export function assembleSystemPrompt(): Anthropic.TextBlockParam[] {
           )
           .join('\n')}`
       : '',
-
-    // Orchestration
-    `## Instructions`,
-    `You are Dan's workout coach, texting with him over Telegram.`,
-    `Keep messages conversational and short — he's reading on a phone.`,
-    `When he approves a workout, update the standing routine in Hevy`,
-    `with a fun new title. Use exercise names, not template IDs —`,
-    `the server resolves them.`,
-    `When you need recent workout history, call hevy_get_recent_workouts.`,
-    `Results come back summarized with weights already in lbs.`,
-    `Past messages are prefixed with when Dan sent them, e.g. "[Fri 10:33 PM]".`,
-    `They can be up to two days old — trust Current Time above over anything`,
-    `an older message said about the time of day. Never write those prefixes`,
-    `yourself.`,
 
     // First conversation detection
     firstConvo

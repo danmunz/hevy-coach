@@ -2,9 +2,13 @@ import Anthropic from '@anthropic-ai/sdk';
 
 import { assembleSystemPrompt, loadChatHistory } from './context.js';
 import { TOOLS } from './tools.js';
-import { READ_ONLY_TOOLS, ToolExecutor } from './tool-executor.js';
-import { HevyClient } from '../hevy/client.js';
-import { addMessage } from '../state/chatlog.js';
+import { READ_ONLY_TOOLS, ToolExecutor, validateWorkoutCount, type ToolOutcome } from './tool-executor.js';
+import { HevyClient, type HevyToolClient } from '../hevy/client.js';
+import { addMessagePair } from '../state/chatlog.js';
+import { contextSection } from '../coach/fresh-context.js';
+import { summarizeWorkouts } from '../hevy/summarize.js';
+import type { CachedWorkout, HevyRoutineRecord } from '../hevy/types.js';
+import { TurnDeadlineError } from './turn-queue.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -49,6 +53,87 @@ const anthropic = new Anthropic();
 const hevyClient = new HevyClient();
 const toolExecutor = new ToolExecutor(hevyClient);
 
+export type ChatProgressStage = 'calling_model' | 'running_tools' | 'complete';
+
+export type ModelEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+export interface ModelCallMetrics {
+  iteration: number;
+  elapsedMs: number;
+  inputTokens: number;
+  cacheWriteTokens: number;
+  cacheReadTokens: number;
+  outputTokens: number;
+  stopReason: string | null;
+  toolCalls: number;
+}
+
+/**
+ * Per-tool telemetry for isolated evaluation. Callers opt in explicitly; the
+ * production transport continues to log only the tool name and input keys.
+ */
+export interface ToolCallMetrics {
+  iteration: number;
+  name: string;
+  input: Record<string, unknown>;
+  result: string;
+  elapsedMs: number;
+}
+
+export interface ChatOptions {
+  /** Default true. Set false for a fully read-only conversation. */
+  persist?: boolean;
+  freshContext?: string;
+  freshWorkouts?: CachedWorkout[];
+  freshRoutines?: HevyRoutineRecord[];
+  turnId?: string;
+  /** Default true. Set false to disable every state-changing tool. */
+  allowMutations?: boolean;
+  /** Default true. The CLI disables only live Hevy routine writes. */
+  allowHevyWrites?: boolean;
+  /** Absolute deadline supplied by the Telegram turn queue. */
+  deadlineAt?: number;
+  /** Default high. The evaluation CLI can override this without changing production. */
+  effort?: ModelEffort;
+  onProgress?: (stage: ChatProgressStage) => void;
+  /** Per-call telemetry hook. Do not persist raw prompt or response content here. */
+  onModelCall?: (metrics: ModelCallMetrics) => void;
+  /**
+   * Replaces the live Hevy transport for an isolated caller such as the
+   * effort evaluator. It is intentionally typed as the production client so
+   * the tool executor follows the same path it does in normal operation.
+   */
+  hevyClient?: HevyToolClient;
+  /** Captures full tool inputs/results only for an explicit evaluation caller. */
+  onToolCall?: (metrics: ToolCallMetrics) => void;
+  /** Evaluation-only cap; production continues to use the module default. */
+  maxOutputTokens?: number;
+  /** Evaluation-only cap; production continues to use the module default. */
+  maxToolIterations?: number;
+  /** Reject an evaluation request before it can exceed its reserved input size. */
+  maxRequestBytes?: number;
+  /** Evaluation-only control that removes prompt-cache markers from the request. */
+  disablePromptCache?: boolean;
+}
+
+function throwIfDeadlineExpired(deadlineAt: number | undefined): void {
+  if (deadlineAt != null && Date.now() >= deadlineAt) {
+    throw new TurnDeadlineError();
+  }
+}
+
+function assertRequestSize(
+  maxRequestBytes: number | undefined,
+  system: Anthropic.MessageCreateParams['system'],
+  messages: Anthropic.MessageParam[],
+): void {
+  if (maxRequestBytes == null) return;
+  const bytes = Buffer.byteLength(JSON.stringify({ system, messages, tools: TOOLS }));
+  if (bytes > maxRequestBytes) {
+    throw new Error(`Evaluation request is ${bytes} bytes, above its ${maxRequestBytes}-byte input budget.`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Chat
 // ---------------------------------------------------------------------------
@@ -62,12 +147,29 @@ const toolExecutor = new ToolExecutor(hevyClient);
  * 4. Store BOTH user and assistant messages after success
  * 5. Return the assistant's response
  */
-export async function chat(userMessage: string): Promise<string> {
+export async function chat(userMessage: string, options: ChatOptions = {}): Promise<string> {
+  const persist = options.persist ?? true;
+  const activeHevyClient = options.hevyClient ?? (options.deadlineAt == null
+    ? hevyClient
+    : new HevyClient(undefined, options.deadlineAt, event => console.log(`[http] turn=${options.turnId ?? 'cli'} ${JSON.stringify(event)}`)));
+  const executor = options.hevyClient != null || options.allowMutations === false || options.allowHevyWrites === false || options.deadlineAt != null
+    ? new ToolExecutor(activeHevyClient, {
+      allowMutations: options.allowMutations,
+      allowHevyWrites: options.allowHevyWrites,
+    })
+    : toolExecutor;
   // 1. Assemble context (before storing the user message — CRIT-001 fix)
-  const systemPrompt = assembleSystemPrompt();
+  let currentFreshContext = options.freshContext ?? '';
+  const assembledSystemPrompt = assembleSystemPrompt(currentFreshContext);
+  let systemPrompt: Anthropic.TextBlockParam[] = options.disablePromptCache
+    ? assembledSystemPrompt.map((block) => ({ type: block.type, text: block.text }))
+    : assembledSystemPrompt;
   const chatHistory = loadChatHistory();
 
   const model = process.env.CLAUDE_MODEL || 'claude-sonnet-5';
+  const effort = options.effort ?? 'high';
+  const maxOutputTokens = options.maxOutputTokens ?? MAX_OUTPUT_TOKENS;
+  const maxToolIterations = options.maxToolIterations ?? MAX_TOOL_ITERATIONS;
 
   // Build the messages array: prior history + current user message (not yet persisted).
   // Both messages are stored AFTER Claude responds successfully to avoid
@@ -85,20 +187,86 @@ export async function chat(userMessage: string): Promise<string> {
   // results come back, so that text is kept only as a fallback for an empty
   // final response — never appended to one that has its own text.
   let iterations = 0;
+  let freshRoutines = options.freshRoutines;
+  let freshWorkouts = options.freshWorkouts;
+  const checkedWorkoutResults = new Map<number, string>();
+  let checkedRoutineResult: string | undefined;
+  const replaceCheckedContext = (kind: 'workouts' | 'routines', text: string): void => {
+    const replacement = contextSection(kind, text, kind === 'workouts' ? 6000 : 3000);
+    currentFreshContext = currentFreshContext.includes(`<checked_${kind}>`)
+      ? currentFreshContext.replace(new RegExp(`<checked_${kind}>[\\s\\S]*?</checked_${kind}>`), () => replacement)
+      : `${currentFreshContext}\n${replacement}`;
+    const next = assembleSystemPrompt(currentFreshContext);
+    systemPrompt = options.disablePromptCache ? next.map(block => ({type:block.type,text:block.text})) : next;
+  };
+  const runRead = async (name: string, input: Record<string, unknown>): Promise<ToolOutcome> => {
+    if (input.refresh !== undefined && typeof input.refresh !== 'boolean') {
+      return {result:'Refresh must be true or false.', status:'error'};
+    }
+    let count = 5;
+    if (name === 'hevy_get_recent_workouts') {
+      try { count = validateWorkoutCount(input.count); }
+      catch { return {result:'Workout count must be an integer from 1 through 10.', status:'error'}; }
+      if (input.refresh !== true) {
+        const result = checkedWorkoutResults.get(count) ?? (freshWorkouts ? summarizeWorkouts(freshWorkouts.slice(0, count)) : undefined);
+        if (result !== undefined) return {result, status:'success'};
+      } else {
+        freshWorkouts = undefined;
+        checkedWorkoutResults.clear();
+      }
+    }
+    if (name === 'hevy_get_routines' && input.routine_id === undefined) {
+      if (input.refresh !== true) {
+        const result = checkedRoutineResult ?? (freshRoutines ? JSON.stringify(freshRoutines) : undefined);
+        if (result !== undefined) return {result, status:'success'};
+      } else { freshRoutines = undefined; checkedRoutineResult = undefined; }
+    }
+    const outcome = await executor.executeWithOutcome(name, input);
+    if (name === 'hevy_get_recent_workouts' || name === 'hevy_get_routines') {
+      const kind = name === 'hevy_get_recent_workouts' ? 'workouts' : 'routines';
+      if (outcome.status === 'success') {
+        if (kind === 'workouts') checkedWorkoutResults.set(count, outcome.result);
+        else if (input.routine_id === undefined) checkedRoutineResult = outcome.result;
+        replaceCheckedContext(kind, `Latest successful tool check:\n${outcome.result}`);
+      } else if (input.refresh === true) {
+        replaceCheckedContext(kind, 'The requested refresh failed. Current data is unavailable. Do not treat earlier data as current.');
+      }
+    }
+    return outcome;
+  };
   const preToolText: string[] = [];
 
-  while (iterations < MAX_TOOL_ITERATIONS) {
+  while (iterations < maxToolIterations) {
     iterations++;
 
-    console.log(`[claude] Calling model=${model} messages=${messages.length} iteration=${iterations}`);
+    throwIfDeadlineExpired(options.deadlineAt);
+    assertRequestSize(options.maxRequestBytes, systemPrompt, messages);
+    options.onProgress?.('calling_model');
+    console.log(`[claude] turn=${options.turnId ?? 'cli'} Calling model=${model} effort=${effort} messages=${messages.length} iteration=${iterations}`);
     const iterationStart = Date.now();
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      system: systemPrompt,
-      messages,
-      tools: TOOLS,
-    });
+    const remainingMs = options.deadlineAt == null
+      ? undefined
+      : options.deadlineAt - Date.now();
+    if (remainingMs != null && remainingMs <= 0) throw new TurnDeadlineError();
+    let response: Anthropic.Message;
+    try {
+      response = await anthropic.messages.create({
+        model,
+        max_tokens: maxOutputTokens,
+        system: systemPrompt,
+        messages,
+        tools: TOOLS,
+        output_config: { effort },
+      }, {
+        maxRetries: 0,
+        ...(remainingMs == null ? {} : { timeout: remainingMs }),
+      });
+    } catch (error) {
+      if (options.deadlineAt != null && Date.now() >= options.deadlineAt) {
+        throw new TurnDeadlineError();
+      }
+      throw error;
+    }
 
     // Extract text from this iteration
     const textBlocks = response.content.filter(
@@ -107,9 +275,9 @@ export async function chat(userMessage: string): Promise<string> {
     const iterationText = textBlocks.map((block) => block.text).join('');
 
     // cache_w/cache_r are the only way to tell a working cache from a silently
-    // missing one. Both are number|null in SDK 0.39.0, hence the `?? 0`.
+    // missing one. Both can be null in the SDK, hence the `?? 0`.
     console.log(
-      `[claude] stop_reason=${response.stop_reason} ` +
+      `[claude] turn=${options.turnId ?? 'cli'} stop_reason=${response.stop_reason} ` +
         `blocks=${response.content.map((b) => b.type).join(',') || 'none'} ` +
         `in=${response.usage.input_tokens} ` +
         `cache_w=${response.usage.cache_creation_input_tokens ?? 0} ` +
@@ -118,26 +286,41 @@ export async function chat(userMessage: string): Promise<string> {
         `ms=${Date.now() - iterationStart}`,
     );
 
+    // Check if Claude wants to use tools
+    const toolUseBlocks = response.content.filter(
+      (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
+    );
+    options.onModelCall?.({
+      iteration: iterations,
+      elapsedMs: Date.now() - iterationStart,
+      inputTokens: response.usage.input_tokens,
+      cacheWriteTokens: response.usage.cache_creation_input_tokens ?? 0,
+      cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+      outputTokens: response.usage.output_tokens,
+      stopReason: response.stop_reason,
+      toolCalls: toolUseBlocks.length,
+    });
+
+    throwIfDeadlineExpired(options.deadlineAt);
+
     // max_tokens means the turn was cut off mid-thought — often partway through
-    // a tool call, which leaves no text and an unusable partial block. Treating
-    // it as a normal finish silently swallows the truncation.
+    // a tool call, which leaves no text and an unusable partial block. The
+    // metrics callback intentionally runs first so evaluators retain the paid
+    // call and can reject a truncation deterministically.
     if (response.stop_reason === 'max_tokens') {
       console.error(
-        `[claude] Response truncated at the ${MAX_OUTPUT_TOKENS}-token cap ` +
+        `[claude] Response truncated at the ${maxOutputTokens}-token cap ` +
           `on iteration ${iterations}; discarding the partial turn.`,
       );
       const truncatedNotice =
         "That answer ran long and got cut off before I could finish. " +
         'Ask me again — I\'ll keep it tighter.';
-      addMessage('user', userMessage);
-      addMessage('assistant', truncatedNotice);
+      if (persist) {
+        addMessagePair(userMessage, truncatedNotice);
+      }
+      options.onProgress?.('complete');
       return truncatedNotice;
     }
-
-    // Check if Claude wants to use tools
-    const toolUseBlocks = response.content.filter(
-      (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
-    );
 
     if (response.stop_reason !== 'tool_use') {
       // No more tool calls. Use this iteration's text; only when it is empty
@@ -162,11 +345,10 @@ export async function chat(userMessage: string): Promise<string> {
       // Store BOTH messages after success (CRIT-001 fix).
       // Skip both if the assistant response is empty to avoid orphaned
       // user messages that corrupt subsequent history.
-      if (finalText) {
-        addMessage('user', userMessage);
-        addMessage('assistant', finalText);
+      if (persist && finalText) {
+        addMessagePair(userMessage, finalText);
       }
-
+      options.onProgress?.('complete');
       return finalText;
     }
 
@@ -192,16 +374,46 @@ export async function chat(userMessage: string): Promise<string> {
     // and then list routines means the list must observe the push; running the
     // read early and reordering the results afterwards would quietly report
     // pre-write state as though it came after.
+    let readCache = new Map<string, Promise<ToolOutcome>>();
     const runTool = async (
       toolBlock: Anthropic.ToolUseBlock,
     ): Promise<Anthropic.ToolResultBlockParam> => {
       const started = Date.now();
-      console.log(`[tool] ${toolBlock.name}(${JSON.stringify(toolBlock.input)})`);
+      options.onProgress?.('running_tools');
+      const input = toolBlock.input as Record<string, unknown>;
+      console.log(`[tool] ${toolBlock.name} input_keys=${Object.keys(input).join(',') || 'none'}`);
 
-      const result = await toolExecutor.execute(
-        toolBlock.name,
-        toolBlock.input as Record<string, unknown>,
-      );
+      throwIfDeadlineExpired(options.deadlineAt);
+      const key = JSON.stringify([toolBlock.name, input]);
+      const read = READ_ONLY_TOOLS.has(toolBlock.name);
+      let task = read ? readCache.get(key) : undefined;
+      if (!task) {
+        task = read ? runRead(toolBlock.name, input) : executor.executeWithOutcome(toolBlock.name, input);
+        if (read) readCache.set(key, task);
+      }
+      const outcome = await task;
+      if (!read && outcome.status === 'success' && (toolBlock.name === 'hevy_push_routine' || toolBlock.name === 'hevy_edit_routine_exercise')) {
+        freshRoutines = undefined;
+        checkedRoutineResult = undefined;
+        replaceCheckedContext('routines', 'Routine data changed after the checked snapshot. Request current routine data before further planning.');
+      }
+      if (!read && outcome.status === 'success' && ['save_note', 'clear_note', 'update_training_maxes'].includes(toolBlock.name)) {
+        const next = assembleSystemPrompt(currentFreshContext);
+        systemPrompt = options.disablePromptCache ? next.map(block => ({type:block.type,text:block.text})) : next;
+      }
+      const result = outcome.result;
+      const failed = outcome.status !== 'success';
+      if (failed) readCache.delete(key);
+      console.log(`[tool] turn=${options.turnId ?? 'cli'} name=${toolBlock.name} status=${outcome.status}`);
+      throwIfDeadlineExpired(options.deadlineAt);
+
+      options.onToolCall?.({
+        iteration: iterations,
+        name: toolBlock.name,
+        input,
+        result,
+        elapsedMs: Date.now() - started,
+      });
 
       console.log(`[tool] ${toolBlock.name} done in ${Date.now() - started}ms`);
       return {
@@ -220,13 +432,15 @@ export async function chat(userMessage: string): Promise<string> {
       if (pendingReads.length === 0) return;
       toolResults.push(...(await Promise.all(pendingReads.map(runTool))));
       pendingReads = [];
+      readCache.clear();
     };
 
     for (const toolBlock of toolUseBlocks) {
-      if (READ_ONLY_TOOLS.has(toolBlock.name)) {
+      if (READ_ONLY_TOOLS.has(toolBlock.name) && (toolBlock.input as Record<string, unknown>).refresh !== true) {
         pendingReads.push(toolBlock);
       } else {
         await flushReads();
+        readCache.clear();
         toolResults.push(await runTool(toolBlock));
       }
     }
@@ -244,7 +458,9 @@ export async function chat(userMessage: string): Promise<string> {
   // always terminate via the early return above.
   const fallbackText =
     '[Max tool iterations reached. Please try again or rephrase your request.]';
-  addMessage('user', userMessage);
-  addMessage('assistant', fallbackText);
+  if (persist) {
+    addMessagePair(userMessage, fallbackText);
+  }
+  options.onProgress?.('complete');
   return fallbackText;
 }

@@ -1,5 +1,5 @@
 import type { ExerciseLookup, HevyTemplateMatch } from "./types.js";
-import { bestTemplateMatch, normalizeText, queryVariants } from "./utils.js";
+import { normalizeText, queryVariants } from "./utils.js";
 
 // ---------------------------------------------------------------------------
 // Pinned exercise name -> Hevy template mappings
@@ -18,15 +18,17 @@ export const EXERCISE_PINS: Record<string, ExerciseLookup> = {
   "Deadlift":                       { query: "Deadlift (Barbell)" },
   "Bench Press":                    { query: "Bench Press (Barbell)", primaryMuscleGroup: "chest" },
   "Overhead Press":                 { query: "Overhead Press (Barbell)", primaryMuscleGroup: "shoulders" },
-  "Front Squat":                    { query: "Front Squat (Barbell)", primaryMuscleGroup: "quadriceps" },
+  "Front Squat":                    { query: "Front Squat", primaryMuscleGroup: "quadriceps" },
 
   // -- Cable exercises --
-  "Face Pull":                      { query: "Face Pull (Cable)" },
+  "Face Pull":                      { query: "Face Pull" },
   "Lat Pulldown":                   { query: "Lat Pulldown (Cable)", primaryMuscleGroup: "lats" },
   "Tricep Pushdown":                { query: "Triceps Pushdown" },
-  "Triceps Rope Pushdown":          { query: "Rope Pushdown", primaryMuscleGroup: "triceps" },
+  "Triceps Rope Pushdown":          { query: "Triceps Rope Pushdown", primaryMuscleGroup: "triceps" },
   "Cable Crunch":                   { query: "Cable Crunch", primaryMuscleGroup: "abdominals" },
-  "Seated Row":                     { query: "Seated Row", primaryMuscleGroup: "upper_back" },
+  "Seated Row":                     { query: "Seated Cable Row - Bar Grip", primaryMuscleGroup: "upper_back" },
+
+  "Seated Row (V Grip)":            { query: "Seated Cable Row - V Grip (Cable)", primaryMuscleGroup: "upper_back" },
 
   // -- Dumbbell exercises --
   "Lateral Raise":                  { query: "Dumbbell Lateral Raise", primaryMuscleGroup: "shoulders" },
@@ -34,11 +36,30 @@ export const EXERCISE_PINS: Record<string, ExerciseLookup> = {
   "Triceps Extension (Dumbbell)":   { query: "Dumbbell Triceps Extension", primaryMuscleGroup: "triceps" },
 
   // -- Bodyweight / minimal equipment --
-  "Dips":                           { query: "Dips" },
   "Pull Up":                        { query: "Pull Up" },
   "Hanging Knee Raise":             { query: "Hanging Knee Raise" },
   "Lunge":                          { query: "Lunge" },
 };
+
+/** Punctuation aliases retain every equipment word. */
+function exerciseKey(name: string): string {
+  return normalizeText(name).replace(/[-_()]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** Only exact titles or unique word-order equivalents identify a template. */
+function safeMatch(candidates: HevyTemplateMatch[], ...names: string[]): HevyTemplateMatch | undefined {
+  for (const name of names) {
+    const key = exerciseKey(name);
+    const exact = candidates.filter((candidate) => exerciseKey(candidate.title) === key);
+    if (exact.length === 1) return exact[0];
+    if (exact.length > 1) return undefined;
+    const words = key.split(" ").sort().join(" ");
+    const equivalent = candidates.filter((candidate) =>
+      exerciseKey(candidate.title).split(" ").sort().join(" ") === words);
+    if (equivalent.length === 1) return equivalent[0];
+  }
+  return undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Bulk resolution
@@ -63,9 +84,11 @@ export async function resolveExerciseMap(
   for (const [displayName, lookup] of Object.entries(EXERCISE_PINS)) {
     const variants = queryVariants(displayName, lookup.query);
     let matched: HevyTemplateMatch | undefined;
+    const candidateTitles = new Set<string>();
 
     for (const variant of variants) {
       const candidates = await searchFn(variant);
+      for (const candidate of candidates) candidateTitles.add(candidate.title);
 
       // Filter by muscle group when specified in the pin.
       const filtered = lookup.primaryMuscleGroup
@@ -77,11 +100,10 @@ export async function resolveExerciseMap(
           )
         : candidates;
 
-      // Fall back to unfiltered candidates when the muscle-group filter
-      // eliminates everything.
-      const pool = filtered.length > 0 ? filtered : candidates;
+      // A missing muscle match must not select an unrelated exercise.
+      const pool = lookup.primaryMuscleGroup ? filtered : candidates;
 
-      matched = bestTemplateMatch(pool, variant, displayName);
+      matched = safeMatch(pool, lookup.query ?? displayName);
       if (matched) break;
     }
 
@@ -90,7 +112,8 @@ export async function resolveExerciseMap(
     } else {
       console.warn(
         `[exercise-pins] Failed to resolve pin "${displayName}" ` +
-          `(query: "${lookup.query ?? displayName}")`,
+          `(query: "${lookup.query ?? displayName}"). Use a specific exercise name. ` +
+          `Candidates: ${[...candidateTitles].join(", ") || "none"}`,
       );
     }
   }
@@ -107,10 +130,10 @@ export async function resolveExerciseMap(
  *
  * Resolution order:
  * 1. Case-insensitive exact match against the pre-resolved {@link exerciseMap}.
- * 2. Fuzzy search via {@link searchFn} using progressively looser query
+ * 2. Unique exact or word-order matching via {@link searchFn} using progressively looser query
  *    variants.
  *
- * When the fuzzy-search fallback is used, a warning is logged so that the
+ * When runtime search is used, a warning is logged so that the
  * pin list can be extended to avoid the runtime search in future runs.
  *
  * @param name        - The exercise name as provided by the caller (e.g. Claude).
@@ -124,24 +147,24 @@ export async function resolveExerciseName(
   searchFn: (query: string) => Promise<HevyTemplateMatch[]>,
 ): Promise<string | null> {
   // 1. Case-insensitive lookup against the pre-resolved map.
-  const normalizedName = normalizeText(name);
+  const normalizedName = exerciseKey(name);
 
-  for (const [key, templateId] of exerciseMap) {
-    if (normalizeText(key) === normalizedName) {
-      return templateId;
-    }
-  }
+  const mappedIds = new Set([...exerciseMap]
+    .filter(([key]) => exerciseKey(key) === normalizedName)
+    .map(([, templateId]) => templateId));
+  if (mappedIds.size === 1) return [...mappedIds][0];
+  if (mappedIds.size > 1) return null;
 
-  // 2. Fuzzy search fallback.
+  // 2. Search more broadly, but retain the complete requested identity.
   const variants = queryVariants(name);
 
   for (const variant of variants) {
     const candidates = await searchFn(variant);
-    const matched = bestTemplateMatch(candidates, variant, name);
+    const matched = safeMatch(candidates, name);
 
     if (matched) {
       console.warn(
-        `[exercise-pins] "${name}" resolved via fuzzy search to ` +
+        `[exercise-pins] "${name}" resolved via runtime search to ` +
           `"${matched.title}" (${matched.id}). Consider adding a pin.`,
       );
       return matched.id;

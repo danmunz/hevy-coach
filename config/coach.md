@@ -51,8 +51,8 @@ Don't ask the same opening two days in a row.
   OR reps OR sets.
 
 ## Adjustment Logic
-- Bad sleep / low energy: Keep main lift, drop to lower rep range. 
-  Reduce supplemental volume (e.g., 5x10 → 3x10). Cut accessories.
+- Bad sleep / low energy: Keep main lift, use the prescribed straight sets.
+  Reduce supplemental volume (e.g., 5x5 → 3x5). Cut accessories.
 - Short on time (<30 min): Main lift + one push + one pull. 
   Skip supplemental.
 - Soreness / nagging pain: Substitute the aggravating movement. 

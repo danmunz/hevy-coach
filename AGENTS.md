@@ -115,6 +115,7 @@ All weights in user-facing code, config files, tool schemas, and Claude conversa
 
 ### 6.3 No Leftover Debugging Artifacts
 - Clean up `console.log` calls that aren't prefixed with a tag (`[hevy]`, `[claude]`, `[tool]`, `[telegram]`, `[fatal]`).
+- Production telemetry also uses `[startup]` for revision identity, `[http]` for request metadata, `[turn]` for coaching stages, `[delivery]` for send results, and `[sync]` for background scan failures. Preserve these prefixes so existing log filters work. Never include credentials or request and response bodies in telemetry.
 - No commented-out code blocks, no `TODO` comments without an accompanying explanation, no scratch files.
 
 ### 6.4 Error Handling Layers
@@ -143,7 +144,7 @@ Errors should be caught at the narrowest appropriate boundary. Don't catch at th
 - **New static content goes in the prefix; anything that varies per request goes in the suffix.** Putting per-request data (especially the clock) above the breakpoint silently destroys the cache — it would pay a cache write every minute and never read.
 - Prompt caching does **not** conflict with hot-reload: the files are still read from disk every message, and the cache is content-addressed, so editing a config file changes the key and re-warms on the next call.
 - Do not memoize the config file reads to "improve caching" — that is what would actually break the hot-reload contract above.
-- Budget the **uncached** portion, not the total. The cached prefix is ~4,400 tokens and is billed at ~0.1x on a hit; the per-request suffix plus chat history is what costs full price on every call, so keep that under ~3000 tokens.
+- Budget the **uncached** portion, not the total. The cached prefix measured 6,129 tokens in the current configuration and is billed at ~0.1x on a hit; the per-request suffix plus chat history is what costs full price on every call, so keep that under ~3000 tokens.
 - Verify with the `cache_w=` / `cache_r=` fields on the `[claude]` log line. On a multi-call turn, iteration 2 should show `cache_r` ≈ the prefix size; a persistent `cache_r=0` means something volatile leaked into the prefix.
 
 ### 7.3 Chat History

@@ -8,7 +8,7 @@
 - Bench with adjustable recline
 - Standard iron plates - 4x45, 2x35, 4x25, 4x10, 2x5, 2x2.5
 - Revolt Fitness upper/lower pulley system on the rack
-- Pulley attachments: long lat pulldown bar, single handle, 
+- Pulley attachments: long lat pulldown bar, single handle, triangle row attachment (V grip)
   Supports: lat pulldowns, cable rows, tricep pushdowns, 
   face pulls, cable curls, cable lateral raises
 
@@ -21,6 +21,9 @@
 
 ## Constraints
 - Home gym — no machines beyond the cable pulley
+- Seated rows use the cable pulley with either the bar or triangle attachment, not a row machine
+- Use "Seated Row" for bar grip and "Seated Row (V Grip)" for the triangle attachment
+- No equipment for dips. Do not prescribe dips, including ring or bench dips
 - No training partner — avoid movements requiring a spotter 
   at failure
 - All weights prescribed and displayed in lbs 
