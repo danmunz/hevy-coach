@@ -433,20 +433,27 @@ export class HevyClient {
       const query = new URLSearchParams({ since, page: String(page), pageSize: "10" });
       const payload = await this.fetchJson<Record<string, unknown>>(`/workouts/events?${query}`);
       const pageCount = payload.page_count ?? payload.pageCount;
+      // Hevy currently returns this undocumented semantic shape for an empty
+      // first page: { page: 1, page_count: 1, workouts: [] }. Accept only
+      // that representation. Any declared `events` value or nonempty
+      // `workouts` field remains invalid here.
+      const legacyEmptyPage = payload.events === undefined && page === 1 && pageCount === 1 &&
+        Array.isArray(payload.workouts) && payload.workouts.length === 0;
+      const pageEvents = legacyEmptyPage ? [] : payload.events;
       if (payload.page !== page || !Number.isInteger(pageCount) ||
           typeof pageCount !== "number" || pageCount < 0 ||
-          !Array.isArray(payload.events) ||
-          (pageCount < page && !(page === 1 && pageCount === 0 && payload.events.length === 0))) {
+          !Array.isArray(pageEvents) ||
+          (pageCount < page && !(page === 1 && pageCount === 0 && pageEvents.length === 0))) {
         throw new Error("Invalid workout event page.");
       }
       if (expectedPages != null && pageCount !== expectedPages) {
         throw new Error("Workout event pages changed during synchronization. Retry the scan.");
       }
       expectedPages = pageCount;
-      if (pageCount > 0 && payload.events.length === 0) {
+      if (pageCount > 0 && pageEvents.length === 0 && !legacyEmptyPage) {
         throw new Error("Incomplete workout event scan.");
       }
-      for (const raw of payload.events) {
+      for (const raw of pageEvents) {
         if (!raw || typeof raw !== "object") throw new Error("Invalid workout event.");
         const event = raw as Record<string, unknown>;
         if (event.type === "updated") {

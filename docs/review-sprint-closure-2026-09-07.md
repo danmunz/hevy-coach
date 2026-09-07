@@ -58,6 +58,18 @@ The first delivery review requested two additional handler tests. Both now cover
 
 ## Release limits
 
+### Production finding: empty workout-event pages
+
+During the first production check, Hevy returned HTTP 200 with
+`{ page: 1, page_count: 1, workouts: [] }` from `/v1/workouts/events`.
+Its published schema specifies an `events` array. The client rejected the
+response and preserved the previous checkpoint. The foreground coaching turn
+continued with a routine check and gave a successful reply.
+
+The client now accepts only this exact empty-page shape. It still rejects
+nonempty `workouts` data, changed page counts, and incomplete event pages.
+The sync log records a fixed failure category without raw response data.
+
 Production verification remains deferred. No restart or remote CI result is claimed.
 Normal use must verify operational behavior before release closure. No additional paid test campaign is authorized.
 Streaming, cache retention changes, and hosting changes remain conditional.

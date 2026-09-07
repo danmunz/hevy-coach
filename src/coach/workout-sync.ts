@@ -4,6 +4,15 @@ import { readWorkoutCache, replaceWorkoutCache } from '../state/workouts.js';
 // Recovery policy, not a claim about Hevy event retention.
 const FULL_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
+function syncFailureKind(error: unknown): string {
+  if (!(error instanceof Error)) return 'unknown';
+  if (error.message === 'Invalid workout event page.') return 'invalid_event_page';
+  if (error.message === 'Incomplete workout event scan.') return 'incomplete_event_scan';
+  if (error.message === 'Workout event pages changed during synchronization. Retry the scan.') return 'changed_event_pages';
+  if (error.message === 'Workout start time is missing or invalid.') return 'invalid_workout_time';
+  return 'read_or_storage';
+}
+
 /** One process owns this coordinator. Failed scans never advance the checkpoint. */
 export class WorkoutSync {
   private lastFullRefreshAt?: number;
@@ -86,7 +95,7 @@ export function startWorkoutPolling(
   let failures = 0;
   const poll = async () => {
     try { await sync.synchronize(); failures = 0; }
-    catch { failures++; console.warn('[sync] scan_failed'); }
+    catch (error) { failures++; console.warn(`[sync] scan_failed kind=${syncFailureKind(error)}`); }
     if (!stopped && intervalSeconds > 0) {
       const delay = Math.max(intervalSeconds, Math.min(intervalSeconds * 2 ** Math.min(failures, 4), 3600)) * 1000 + clock.random()*5000;
       cancel = clock.schedule(() => { void poll(); }, delay);

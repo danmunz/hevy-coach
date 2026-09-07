@@ -47,6 +47,25 @@ test("invalid and incomplete event scans fail instead of returning partial state
   } finally { globalThis.fetch = original; }
 });
 
+test("accepts only Hevy's undocumented empty event-page shape", async () => {
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => Response.json({ page: 1, page_count: 1, workouts: [] });
+    assert.deepEqual(await new HevyClient("fixture").getWorkoutEvents("2026-01-01"), []);
+
+    for (const payload of [
+      { page: 1, page_count: 1, workouts: [workout] },
+      { page: 1, page_count: 2, workouts: [] },
+      { page: 2, page_count: 1, workouts: [] },
+      { page: 1, page_count: 1, events: [], workouts: [] },
+      { page: 1, page_count: 1, events: null, workouts: [] },
+    ]) {
+      globalThis.fetch = async () => Response.json(payload);
+      await assert.rejects(new HevyClient("fixture").getWorkoutEvents("2026-01-01"));
+    }
+  } finally { globalThis.fetch = original; }
+});
+
 test("template misses share one refresh and repeated misses do not repeat refresh", async () => {
   const original = globalThis.fetch;
   let calls = 0;
