@@ -156,3 +156,63 @@ change the production effort setting from this result alone.
 The private result artifact is outside Git. It contains response text and tool
 inputs. Its local path is
 `/var/folders/36/nh_213gx7cg0_x5r50mq3skm0000gn/T/hevy-coach-effort-results-ceeK19/evaluation.json`.
+
+## Final $20 decision campaign
+
+The final campaign ran on 2026-09-07. It used the frozen production-limit
+smoke test and a complete bounded matrix. The campaign used four scenarios,
+five repetitions, and two effort levels. It made no live Hevy API write.
+
+The evaluator reserved $19.737600 before it sent a model request. Its hard
+limit was $20.000000. It started all forty planned workers. It made no retry
+or extra request. The evaluator disabled prompt caching for both effort sessions.
+
+| Budget measure | Value |
+| --- | ---: |
+| Reserved cost | $19.737600 |
+| Modeled cost | $2.079006 |
+| Workers | 40 / 40 |
+| Passed workers | 34 / 40 |
+| Failed workers | 6 / 40 |
+| Total worker time | 854.333 s |
+
+| Measure | High | Medium | Result |
+| --- | ---: | ---: | --- |
+| Passed cases | 14 / 20 | 20 / 20 | High failed six cases |
+| Median case time | 24.463 s | 17.980 s | Medium was 26.5% faster |
+| Median modeled cost | $0.051515 | $0.047631 | Medium cost 7.5% less |
+| Total modeled cost | $1.084564 | $0.994442 | Medium cost $0.090122 less |
+| Truncations | 6 | 0 | Medium passed |
+| Cache writes | 0 | 0 | Cache condition matched |
+
+| Scenario | High passes | Medium passes | High median time | Medium median time |
+| --- | ---: | ---: | ---: | ---: |
+| History analysis | 4 / 5 | 5 / 5 | 19.499 s | 15.502 s |
+| Pain note | 2 / 5 | 5 / 5 | 29.822 s | 23.190 s |
+| Training-max approval | 4 / 5 | 5 / 5 | 23.630 s | 15.843 s |
+| Approved routine push | 4 / 5 | 5 / 5 | 21.670 s | 20.598 s |
+
+High failed six cases. Each failure reached the 2,048-token output limit.
+
+| Scenario | Repetition | Failure |
+| --- | ---: | --- |
+| Pain note | 1 | Final response truncated |
+| Pain note | 2 | Final response truncated |
+| Pain note | 4 | Final response truncated |
+| Approved routine push | 3 | Final response truncated before the required routine update |
+| Training-max approval | 5 | Final response truncated |
+| History analysis | 5 | Final response truncated |
+
+Medium completed every scenario without a truncation, tool-limit result,
+deadline error, unexpected mutation, or invalid routine payload. Medium also
+met the 15% aggregate latency gain rule. It met the no-regression rules.
+
+**Decision: retain `high`.** The registered decision rule requires zero
+guardrail failures for both efforts. High failed six bounded cases. The test
+therefore does not authorize a production change to `medium`.
+
+The decision artifact is outside Git. It contains response text and tool
+inputs. Its SHA-256 value is
+`bd0658c04ba084288ac9d2c2bdc52662fe7b3b877f9916603381a3b5d56a4983`.
+Its local path is
+`/var/folders/36/nh_213gx7cg0_x5r50mq3skm0000gn/T/hevy-coach-effort-results-4hn9sS/evaluation.json`.
