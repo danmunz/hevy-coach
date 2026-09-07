@@ -52,6 +52,19 @@ const toolExecutor = new ToolExecutor(hevyClient);
 
 export type ChatProgressStage = 'calling_model' | 'running_tools' | 'complete';
 
+export type ModelEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+export interface ModelCallMetrics {
+  iteration: number;
+  elapsedMs: number;
+  inputTokens: number;
+  cacheWriteTokens: number;
+  cacheReadTokens: number;
+  outputTokens: number;
+  stopReason: string | null;
+  toolCalls: number;
+}
+
 export interface ChatOptions {
   /** Default true. Set false for a fully read-only conversation. */
   persist?: boolean;
@@ -61,7 +74,11 @@ export interface ChatOptions {
   allowHevyWrites?: boolean;
   /** Absolute deadline supplied by the Telegram turn queue. */
   deadlineAt?: number;
+  /** Default high. The evaluation CLI can override this without changing production. */
+  effort?: ModelEffort;
   onProgress?: (stage: ChatProgressStage) => void;
+  /** Per-call telemetry hook. Do not persist raw prompt or response content here. */
+  onModelCall?: (metrics: ModelCallMetrics) => void;
 }
 
 function throwIfDeadlineExpired(deadlineAt: number | undefined): void {
@@ -99,6 +116,7 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
   const chatHistory = loadChatHistory();
 
   const model = process.env.CLAUDE_MODEL || 'claude-sonnet-5';
+  const effort = options.effort ?? 'high';
 
   // Build the messages array: prior history + current user message (not yet persisted).
   // Both messages are stored AFTER Claude responds successfully to avoid
@@ -123,7 +141,7 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
 
     throwIfDeadlineExpired(options.deadlineAt);
     options.onProgress?.('calling_model');
-    console.log(`[claude] Calling model=${model} messages=${messages.length} iteration=${iterations}`);
+    console.log(`[claude] Calling model=${model} effort=${effort} messages=${messages.length} iteration=${iterations}`);
     const iterationStart = Date.now();
     const remainingMs = options.deadlineAt == null
       ? undefined
@@ -137,7 +155,7 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
         system: systemPrompt,
         messages,
         tools: TOOLS,
-        output_config: { effort: 'high' },
+        output_config: { effort },
       }, {
         maxRetries: 0,
         ...(remainingMs == null ? {} : { timeout: remainingMs }),
@@ -157,7 +175,7 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
     const iterationText = textBlocks.map((block) => block.text).join('');
 
     // cache_w/cache_r are the only way to tell a working cache from a silently
-    // missing one. Both are number|null in SDK 0.39.0, hence the `?? 0`.
+    // missing one. Both can be null in the SDK, hence the `?? 0`.
     console.log(
       `[claude] stop_reason=${response.stop_reason} ` +
         `blocks=${response.content.map((b) => b.type).join(',') || 'none'} ` +
@@ -191,6 +209,16 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
     const toolUseBlocks = response.content.filter(
       (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
     );
+    options.onModelCall?.({
+      iteration: iterations,
+      elapsedMs: Date.now() - iterationStart,
+      inputTokens: response.usage.input_tokens,
+      cacheWriteTokens: response.usage.cache_creation_input_tokens ?? 0,
+      cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+      outputTokens: response.usage.output_tokens,
+      stopReason: response.stop_reason,
+      toolCalls: toolUseBlocks.length,
+    });
 
     if (response.stop_reason !== 'tool_use') {
       // No more tool calls. Use this iteration's text; only when it is empty

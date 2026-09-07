@@ -104,6 +104,22 @@ npm run chat
 
 Opens an interactive REPL that talks to Claude with the full tool loop — same brain as the Telegram bot, just in your terminal. It starts from a temporary SQLite backup, so chat history, notes, and training-max updates can be exercised without changing the production database. It can make live Hevy **read** calls, but blocks all Hevy routine writes. The temporary state is deleted when the REPL exits.
 
+### Effort evaluation
+
+To compare the production `high` reasoning effort with the `medium` candidate,
+run the fixed guardrail scenarios in independent scratch sessions:
+
+```bash
+npm run evaluate:effort -- high 5
+npm run evaluate:effort -- medium 5
+```
+
+Each run leaves production SQLite state and Hevy routines untouched. It prints
+per-call latency, token/cache measurements, and deterministic pass/fail checks
+without printing the coaching responses. Keep `high` unless `medium` passes
+every guardrail and produces at least a 15% improvement in the chosen latency
+or cost measure.
+
 ### 2. Run the Telegram bot (foreground)
 
 ```bash
