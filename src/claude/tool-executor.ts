@@ -68,6 +68,20 @@ function parseExerciseInputs(
 // Tool Executor
 // ---------------------------------------------------------------------------
 
+/**
+ * Tools that only read. These are safe to run concurrently; everything else
+ * touches Hevy or SQLite state (`routine_id`, `last_routine_payload`, notes,
+ * training maxes) and is run sequentially so overlapping read-modify-write
+ * cycles can't leave stored state disagreeing with what's actually in Hevy.
+ *
+ * All the latency lives in these three anyway — the writes are one call each.
+ */
+export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
+  'hevy_get_recent_workouts',
+  'hevy_get_exercise_history',
+  'hevy_get_routines',
+]);
+
 export class ToolExecutor {
   constructor(private hevyClient: HevyClient) {}
 
@@ -83,6 +97,7 @@ export class ToolExecutor {
     toolInput: Record<string, unknown>,
   ): Promise<string> {
     try {
+      // Keep READ_ONLY_TOOLS in sync with the cases below when adding a tool.
       switch (toolName) {
         case "hevy_get_recent_workouts":
           return await this.getRecentWorkouts(toolInput);

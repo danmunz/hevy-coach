@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 import { assembleSystemPrompt, loadChatHistory } from './context.js';
 import { TOOLS } from './tools.js';
-import { ToolExecutor } from './tool-executor.js';
+import { READ_ONLY_TOOLS, ToolExecutor } from './tool-executor.js';
 import { HevyClient } from '../hevy/client.js';
 import { addMessage } from '../state/chatlog.js';
 
@@ -11,6 +11,10 @@ import { addMessage } from '../state/chatlog.js';
 // ---------------------------------------------------------------------------
 
 const MAX_TOOL_ITERATIONS = 10;
+
+// A full hevy_push_routine call spells out every set as its own JSON object, so
+// a whole workout runs to thousands of tokens. 4096 truncated those mid-call.
+const MAX_OUTPUT_TOKENS = 16000;
 
 // ---------------------------------------------------------------------------
 // History sanitizer
@@ -87,9 +91,10 @@ export async function chat(userMessage: string): Promise<string> {
     iterations++;
 
     console.log(`[claude] Calling model=${model} messages=${messages.length} iteration=${iterations}`);
+    const iterationStart = Date.now();
     const response = await anthropic.messages.create({
       model,
-      max_tokens: 4096,
+      max_tokens: MAX_OUTPUT_TOKENS,
       system: systemPrompt,
       messages,
       tools: TOOLS,
@@ -101,6 +106,34 @@ export async function chat(userMessage: string): Promise<string> {
     );
     const iterationText = textBlocks.map((block) => block.text).join('');
 
+    // cache_w/cache_r are the only way to tell a working cache from a silently
+    // missing one. Both are number|null in SDK 0.39.0, hence the `?? 0`.
+    console.log(
+      `[claude] stop_reason=${response.stop_reason} ` +
+        `blocks=${response.content.map((b) => b.type).join(',') || 'none'} ` +
+        `in=${response.usage.input_tokens} ` +
+        `cache_w=${response.usage.cache_creation_input_tokens ?? 0} ` +
+        `cache_r=${response.usage.cache_read_input_tokens ?? 0} ` +
+        `out=${response.usage.output_tokens} ` +
+        `ms=${Date.now() - iterationStart}`,
+    );
+
+    // max_tokens means the turn was cut off mid-thought — often partway through
+    // a tool call, which leaves no text and an unusable partial block. Treating
+    // it as a normal finish silently swallows the truncation.
+    if (response.stop_reason === 'max_tokens') {
+      console.error(
+        `[claude] Response truncated at the ${MAX_OUTPUT_TOKENS}-token cap ` +
+          `on iteration ${iterations}; discarding the partial turn.`,
+      );
+      const truncatedNotice =
+        "That answer ran long and got cut off before I could finish. " +
+        'Ask me again — I\'ll keep it tighter.';
+      addMessage('user', userMessage);
+      addMessage('assistant', truncatedNotice);
+      return truncatedNotice;
+    }
+
     // Check if Claude wants to use tools
     const toolUseBlocks = response.content.filter(
       (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
@@ -111,10 +144,18 @@ export async function chat(userMessage: string): Promise<string> {
       // fall back to whatever Claude said before its tool calls.
       const finalText = iterationText || preToolText.join('\n\n');
 
-      if (!finalText) {
+      // Falling back means Claude finished without answering and the user gets
+      // a stale "let me check…" preamble instead. Say so loudly — this used to
+      // be invisible because only the fully-empty case warned.
+      if (!iterationText && preToolText.length > 0) {
+        console.warn(
+          `[claude] Final turn had no text (stop_reason=${response.stop_reason}); ` +
+            'replying with the pre-tool preamble instead.',
+        );
+      } else if (!finalText) {
         console.warn(
           `[claude] No text in any iteration. stop_reason=${response.stop_reason} ` +
-          `block_types=${response.content.map((b) => b.type).join(',')}`,
+            `block_types=${response.content.map((b) => b.type).join(',')}`,
         );
       }
 
@@ -140,10 +181,21 @@ export async function chat(userMessage: string): Promise<string> {
       content: response.content,
     });
 
-    // Execute each tool call and build tool_result blocks
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
-
-    for (const toolBlock of toolUseBlocks) {
+    // Execute the tool calls in the order Claude asked, running consecutive
+    // read-only tools concurrently — it routinely wants recent workouts and
+    // routines in one turn, and serializing those Hevy round-trips costs wall
+    // time for nothing.
+    //
+    // A write acts as a barrier: it waits for the reads queued before it, and
+    // the reads after it wait for the write. Relative order has to hold, not
+    // just the order results are presented in. Claude asking to push a routine
+    // and then list routines means the list must observe the push; running the
+    // read early and reordering the results afterwards would quietly report
+    // pre-write state as though it came after.
+    const runTool = async (
+      toolBlock: Anthropic.ToolUseBlock,
+    ): Promise<Anthropic.ToolResultBlockParam> => {
+      const started = Date.now();
       console.log(`[tool] ${toolBlock.name}(${JSON.stringify(toolBlock.input)})`);
 
       const result = await toolExecutor.execute(
@@ -151,12 +203,34 @@ export async function chat(userMessage: string): Promise<string> {
         toolBlock.input as Record<string, unknown>,
       );
 
-      toolResults.push({
+      console.log(`[tool] ${toolBlock.name} done in ${Date.now() - started}ms`);
+      return {
         type: 'tool_result',
         tool_use_id: toolBlock.id,
         content: result,
-      });
+      };
+    };
+
+    // execute() never throws — it catches internally and returns the error as
+    // a conversational string — so Promise.all cannot reject here.
+    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    let pendingReads: Anthropic.ToolUseBlock[] = [];
+
+    const flushReads = async (): Promise<void> => {
+      if (pendingReads.length === 0) return;
+      toolResults.push(...(await Promise.all(pendingReads.map(runTool))));
+      pendingReads = [];
+    };
+
+    for (const toolBlock of toolUseBlocks) {
+      if (READ_ONLY_TOOLS.has(toolBlock.name)) {
+        pendingReads.push(toolBlock);
+      } else {
+        await flushReads();
+        toolResults.push(await runTool(toolBlock));
+      }
     }
+    await flushReads();
 
     // Append tool results as a user message
     messages.push({
