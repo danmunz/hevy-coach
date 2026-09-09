@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Context } from 'telegraf';
-import { TurnQueue } from '../src/claude/turn-queue.js';
+import { ModelResponseTimeoutError, TurnQueue } from '../src/claude/turn-queue.js';
 import { DeliveryError, safeErrorFields, sendSplitMessages } from '../src/telegram/client.js';
 import { handleMessageTurn } from '../src/telegram/handler.js';
 
@@ -95,6 +95,16 @@ test('handler passes the receipt deadline and caps the separate failure notice',
     }, logFailure: () => {} });
   assert.equal(deadlines[0], receivedAt + 75_000);
   assert.equal(deadlines.length, 2);
+});
+
+test('a model timeout gives a retry notice without implying an unapproved Hevy write', async () => {
+  const messages: string[] = [];
+  await handleMessageTurn({ queue: new TurnQueue(), receivedAt: Date.now(),
+    coach: async () => { throw new ModelResponseTimeoutError(); },
+    deliver: async text => { messages.push(text); }, logFailure: () => {} });
+  assert.equal(messages.length, 1);
+  assert.match(messages[0], /If you did not approve a routine update/);
+  assert.doesNotMatch(messages[0], /Some changes may already be saved/);
 });
 
 test('an exhausted turn deadline prevents even the first delivery request', async () => {

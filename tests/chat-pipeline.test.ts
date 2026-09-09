@@ -31,7 +31,7 @@ globalThis.fetch = async (input, init) => {
     stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 },
   });
 };
-const { chat } = await import('../src/claude/client.js');
+const { chat, DELIVERY_RESERVE_MS, MAX_MODEL_REQUEST_MS, modelRequestTimeoutMs } = await import('../src/claude/client.js');
 
 test.after(() => {
   globalThis.fetch = originalFetch;
@@ -64,6 +64,16 @@ test('identical consecutive reads share one Hevy request and retain every tool r
   assert.deepEqual(results().map(result => result.tool_use_id), ['first', 'second']);
   assert.equal(results()[0].content, results()[1].content);
   assert.equal(responses.length, 0);
+});
+
+test('production defaults to medium effort and reserves Telegram delivery time', async () => {
+  script([{ type: 'text', text: 'Ready.' }]);
+  assert.equal(await chat('Morning.', { persist: false }), 'Ready.');
+  assert.deepEqual((requests[0].output_config as Record<string, unknown>), { effort: 'medium' });
+  const now = 1_000_000;
+  assert.equal(modelRequestTimeoutMs(now + DELIVERY_RESERVE_MS + MAX_MODEL_REQUEST_MS + 1, now), MAX_MODEL_REQUEST_MS);
+  assert.equal(modelRequestTimeoutMs(now + DELIVERY_RESERVE_MS + 123, now), 123);
+  assert.throws(() => modelRequestTimeoutMs(now + DELIVERY_RESERVE_MS, now), /too long/);
 });
 
 test('fresh workout and routine records avoid remote reads', async () => {

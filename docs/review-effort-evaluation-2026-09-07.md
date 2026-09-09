@@ -207,9 +207,19 @@ Medium completed every scenario without a truncation, tool-limit result,
 deadline error, unexpected mutation, or invalid routine payload. Medium also
 met the 15% aggregate latency gain rule. It met the no-regression rules.
 
-**Decision: retain `high`.** The registered decision rule requires zero
-guardrail failures for both efforts. High failed six bounded cases. The test
-therefore does not authorize a production change to `medium`.
+**Original decision: retain `high`.** The registered decision rule required
+zero guardrail failures for both efforts. High failed six bounded cases, so the
+test alone did not authorize a production change to `medium`.
+
+**Production change — 2026-09-09:** a live high-effort Telegram turn used
+about 21 seconds for its first model call, completed an exercise-history read,
+then exhausted the 75-second end-to-end deadline in its follow-up model call.
+That is the real-world latency failure the campaign was designed to detect.
+Medium had passed all 20 bounded cases and was 26.5% faster in median case
+time, so production now defaults to `medium`. `CLAUDE_EFFORT=high` provides a
+reversible rollback. This is a reliability decision based on the controlled
+evidence plus the observed production incident; it is not a new paid
+evaluation.
 
 The decision artifact is outside Git. It contains response text and tool
 inputs. Its SHA-256 value is

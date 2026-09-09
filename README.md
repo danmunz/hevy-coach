@@ -81,6 +81,7 @@ npm run chat
 | `HEVY_API_KEY` | Yes | Hevy API key (Pro subscription required) |
 | `AUTHORIZED_CHAT_ID` | Yes | Your Telegram chat ID — only this user can talk to the bot |
 | `CLAUDE_MODEL` | No | Claude model to use (default: `claude-sonnet-5`) |
+| `CLAUDE_EFFORT` | No | Claude reasoning effort: `low`, `medium`, `high`, `xhigh`, or `max` (default: `medium`). Use an explicit value to make a temporary rollback or experiment reversible. |
 | `TIMEZONE` | No | Your timezone for local time display (default: `America/New_York`) |
 | `HEVY_SYNC_INTERVAL_SECONDS` | No | Background workout check interval in seconds (default: `300`). Set to `0` to disable background checks. Each coaching turn still checks Hevy. |
 
@@ -306,6 +307,8 @@ For an unpinned exercise, the bot searches the catalog for a unique exact or wor
 ### 7. Environment variables (`.env`)
 
 `CLAUDE_MODEL` selects the model. The default is `claude-sonnet-5`.
+`CLAUDE_EFFORT` selects the reasoning effort. The default is `medium`; set it
+to `high` to restore the previous production behavior.
 
 `TIMEZONE` affects the local time shown in the system prompt, which helps the coach know if it's morning, afternoon, or late at night.
 

@@ -1,4 +1,4 @@
-import { TurnContext, TurnDeadlineError, TurnExpiredError, TurnQueue } from '../claude/turn-queue.js';
+import { ModelResponseTimeoutError, TurnContext, TurnDeadlineError, TurnExpiredError, TurnQueue } from '../claude/turn-queue.js';
 import { DeliveryError, safeErrorFields, sanitizeHtml } from './client.js';
 
 export interface MessageTurn {
@@ -22,7 +22,8 @@ export async function handleMessageTurn(options: MessageTurn): Promise<void> {
     options.logFailure(safeErrorFields(error));
     const notice = error instanceof DeliveryError ? deliveryFailureNotice(error)
       : error instanceof TurnExpiredError ? error.message
-      : error instanceof TurnDeadlineError ? 'Coaching reached its time limit. Some changes may already be saved. Check the app before repeating a change request.'
+      : error instanceof ModelResponseTimeoutError || error instanceof TurnDeadlineError
+        ? 'Coaching could not finish its reply in time. If you did not approve a routine update, no Hevy check is needed. Please send the request again.'
       : 'Coaching did not finish. Some changes may already be saved. Check the app before repeating a change request.';
     try { await options.deliver(notice, Date.now() + 5_000); }
     catch (noticeError) { options.logFailure(safeErrorFields(noticeError)); }

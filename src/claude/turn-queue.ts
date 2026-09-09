@@ -12,6 +12,18 @@ export class TurnDeadlineError extends Error {
   }
 }
 
+/**
+ * A model request was stopped before the turn deadline so Telegram still has
+ * time to deliver a useful, unambiguous reply. This is distinct from a hard
+ * turn deadline: earlier tool calls may have completed, but this call did not.
+ */
+export class ModelResponseTimeoutError extends Error {
+  constructor() {
+    super('The coaching model did not finish its reply in the allotted time. Please send the request again.');
+    this.name = 'ModelResponseTimeoutError';
+  }
+}
+
 export interface TurnContext {
   receivedAt: number;
   startedAt: number;

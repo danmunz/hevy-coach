@@ -8,7 +8,7 @@ import { addMessagePair } from '../state/chatlog.js';
 import { contextSection } from '../coach/fresh-context.js';
 import { summarizeWorkouts } from '../hevy/summarize.js';
 import type { HevyCompletedWorkout, HevyRoutineRecord } from '../hevy/types.js';
-import { TurnDeadlineError } from './turn-queue.js';
+import { ModelResponseTimeoutError, TurnDeadlineError } from './turn-queue.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -19,6 +19,20 @@ const MAX_TOOL_ITERATIONS = 10;
 // A full hevy_push_routine call spells out every set as its own JSON object, so
 // a whole workout runs to thousands of tokens. 4096 truncated those mid-call.
 const MAX_OUTPUT_TOKENS = 16000;
+
+// A Telegram turn has one end-to-end deadline. Do not let a late model call
+// spend its final seconds: delivery and a bounded failure notice need time as
+// well. The cap also prevents one slow follow-up after a tool call from using
+// the entire remaining turn.
+export const DELIVERY_RESERVE_MS = 10_000;
+export const MAX_MODEL_REQUEST_MS = 40_000;
+
+export function modelRequestTimeoutMs(deadlineAt: number | undefined, now = Date.now()): number | undefined {
+  if (deadlineAt == null) return undefined;
+  const availableMs = deadlineAt - now - DELIVERY_RESERVE_MS;
+  if (availableMs <= 0) throw new TurnDeadlineError();
+  return Math.min(availableMs, MAX_MODEL_REQUEST_MS);
+}
 
 // ---------------------------------------------------------------------------
 // History sanitizer
@@ -93,7 +107,7 @@ export interface ChatOptions {
   allowHevyWrites?: boolean;
   /** Absolute deadline supplied by the Telegram turn queue. */
   deadlineAt?: number;
-  /** Default high. The evaluation CLI can override this without changing production. */
+  /** Default medium. The evaluation CLI can override this without changing production. */
   effort?: ModelEffort;
   onProgress?: (stage: ChatProgressStage) => void;
   /** Per-call telemetry hook. Do not persist raw prompt or response content here. */
@@ -169,7 +183,15 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
   const chatHistory = loadChatHistory();
 
   const model = process.env.CLAUDE_MODEL || 'claude-sonnet-5';
-  const effort = options.effort ?? 'high';
+  // Medium is the production default. The completed evaluation campaign passed
+  // every medium fixture and was materially faster; a live high-effort turn
+  // also exhausted the Telegram deadline on its follow-up model call. Keep an
+  // explicit option for evaluation and an environment override for rollback.
+  const configuredEffort = process.env.CLAUDE_EFFORT;
+  const effort = options.effort
+    ?? (configuredEffort === 'low' || configuredEffort === 'medium' || configuredEffort === 'high' || configuredEffort === 'xhigh' || configuredEffort === 'max'
+      ? configuredEffort
+      : 'medium');
   const maxOutputTokens = options.maxOutputTokens ?? MAX_OUTPUT_TOKENS;
   const maxToolIterations = options.maxToolIterations ?? MAX_TOOL_ITERATIONS;
 
@@ -247,10 +269,8 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
     options.onProgress?.('calling_model');
     console.log(`[claude] turn=${options.turnId ?? 'cli'} Calling model=${model} effort=${effort} messages=${messages.length} iteration=${iterations}`);
     const iterationStart = Date.now();
-    const remainingMs = options.deadlineAt == null
-      ? undefined
-      : options.deadlineAt - Date.now();
-    if (remainingMs != null && remainingMs <= 0) throw new TurnDeadlineError();
+    const modelTimeoutMs = modelRequestTimeoutMs(options.deadlineAt);
+    const modelDeadlineAt = modelTimeoutMs == null ? undefined : Date.now() + modelTimeoutMs;
     let response: Anthropic.Message;
     try {
       response = await anthropic.messages.create({
@@ -262,11 +282,14 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
         output_config: { effort },
       }, {
         maxRetries: 0,
-        ...(remainingMs == null ? {} : { timeout: remainingMs }),
+        ...(modelTimeoutMs == null ? {} : { timeout: modelTimeoutMs }),
       });
     } catch (error) {
       if (options.deadlineAt != null && Date.now() >= options.deadlineAt) {
         throw new TurnDeadlineError();
+      }
+      if (modelDeadlineAt != null && Date.now() >= modelDeadlineAt) {
+        throw new ModelResponseTimeoutError();
       }
       throw error;
     }
