@@ -827,7 +827,7 @@ export function buildRoutineSnapshot(
 ): HevyRoutineSnapshot {
   return {
     title,
-    exercises: exercises.map((ex) => {
+    exercises: exercises.map((ex, index) => {
     const normalizedName = ex.name.trim().toLowerCase();
     const templateId = exerciseMap.get(normalizedName);
 
@@ -851,6 +851,13 @@ export function buildRoutineSnapshot(
   };
 }
 
+function defaultRestSeconds(exercises: Array<{ supersetId?: number | null }>, index: number): number {
+  const exercise = exercises[index];
+  if (exercise.supersetId == null) return 150;
+  const firstInSuperset = exercises.findIndex((candidate) => candidate.supersetId === exercise.supersetId);
+  return index === firstInSuperset ? 60 : 120;
+}
+
 export function routineSnapshotsMatch(
   first: HevyRoutineSnapshot,
   second: HevyRoutineSnapshot,
@@ -867,9 +874,10 @@ function buildRoutineBody(
   return {
     routine: {
       title: snapshot.title,
-      exercises: snapshot.exercises.map((exercise) => ({
+      exercises: snapshot.exercises.map((exercise, index) => ({
         exercise_template_id: exercise.exerciseTemplateId,
         superset_id: exercise.supersetId,
+        rest_seconds: defaultRestSeconds(snapshot.exercises, index),
         sets: exercise.sets.map((set) => ({
           type: set.type,
           weight_kg: set.weightKg,
@@ -884,9 +892,10 @@ function buildRoutineBody(
 export function buildRoutineBodyFromSnapshot(snapshot: HevyRoutineSnapshot): Record<string, unknown> {
   return { routine: {
     title: snapshot.title,
-    exercises: snapshot.exercises.map(exercise => ({
+    exercises: snapshot.exercises.map((exercise, index) => ({
       exercise_template_id: exercise.exerciseTemplateId,
       superset_id: exercise.supersetId,
+      rest_seconds: defaultRestSeconds(snapshot.exercises, index),
       sets: exercise.sets.map(set => ({ type: set.type, weight_kg: set.weightKg, reps: set.reps })),
     })),
   } };

@@ -17,8 +17,24 @@ test('ID-bound routine bodies retain the selected template IDs', () => {
   });
   assert.deepEqual(body, { routine: { title: 'ID fixture', exercises: [{
     exercise_template_id: 'opaque-not-a-name', superset_id: null,
+    rest_seconds: 150,
     sets: [{ type: 'normal', weight_kg: 61.235, reps: 5 }],
   }] } });
+});
+
+test('routine bodies apply default and superset rest timers by exercise order', () => {
+  const body = buildRoutineBodyFromSnapshot({
+    title: 'Rest fixture',
+    exercises: [
+      { exerciseTemplateId: 'a', supersetId: 1, sets: [] },
+      { exerciseTemplateId: 'b', supersetId: 1, sets: [] },
+      { exerciseTemplateId: 'c', supersetId: null, sets: [] },
+    ],
+  });
+  assert.deepEqual(
+    (body.routine as { exercises: Array<{ rest_seconds: number }> }).exercises.map((exercise) => exercise.rest_seconds),
+    [60, 120, 150],
+  );
 });
 
 test("events preserve order and normalize both event shapes across all pages", async () => {
