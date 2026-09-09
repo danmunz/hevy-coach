@@ -1,5 +1,7 @@
 import type {
   HevyCompletedWorkout,
+  CachedWorkout,
+  CachedWorkoutSet,
   HevyCompletedWorkoutExercise,
   HevyCompletedWorkoutSet,
   HevyExerciseHistoryEntry,
@@ -36,11 +38,12 @@ function formatDate(iso: string | undefined): string {
  * Returns a compact string like "205x5" (weight in lbs x reps).
  * For bodyweight or zero-weight exercises, shows just reps.
  */
-function setSummary(set: HevyCompletedWorkoutSet | HevyExerciseHistoryEntry): string {
-  const weightKg = set.weightKg ?? 0;
+function setSummary(set: HevyCompletedWorkoutSet | HevyExerciseHistoryEntry | CachedWorkoutSet): string {
+  const weightLbs = "weightLbs" in set ? Math.round(set.weightLbs ?? 0)
+    : "weightKg" in set ? kilogramsToPounds(set.weightKg ?? 0) : 0;
   const reps = set.reps ?? 0;
-  const core = weightKg > 0
-    ? `${kilogramsToPounds(weightKg)}x${reps}`
+  const core = weightLbs > 0
+    ? `${weightLbs}x${reps}`
     : set.durationSeconds && set.durationSeconds > 0
       ? `${set.durationSeconds}s`
       : set.distanceMeters && set.distanceMeters > 0
@@ -54,7 +57,7 @@ function setSummary(set: HevyCompletedWorkoutSet | HevyExerciseHistoryEntry): st
 }
 
 /** Compactly preserves every performed set, grouping only adjacent equals. */
-function setGroups(sets: Array<HevyCompletedWorkoutSet | HevyExerciseHistoryEntry>): string {
+function setGroups(sets: Array<HevyCompletedWorkoutSet | HevyExerciseHistoryEntry | CachedWorkoutSet>): string {
   if (sets.length === 0) return "no sets";
   const groups: Array<{ summary: string; count: number }> = [];
   for (const set of sets) {
@@ -83,7 +86,7 @@ function setGroups(sets: Array<HevyCompletedWorkoutSet | HevyExerciseHistoryEntr
  * - Mon Sep 1: Bench Day -- Bench: 155x7, OHP: 65x10, Face Pull: 30x15
  * ```
  */
-export function summarizeWorkouts(workouts: HevyCompletedWorkout[]): string {
+export function summarizeWorkouts(workouts: Array<HevyCompletedWorkout | CachedWorkout>): string {
   if (workouts.length === 0) {
     return "No recent workouts found.";
   }

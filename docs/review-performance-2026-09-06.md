@@ -1,7 +1,9 @@
 # Performance audit: Hevy Coach
 
-Date: September 6, 2026 (America/New_York)  
-Scope: current source, configuration, scripts, dependencies, runtime settings, local log samples, read-only database statistics, prior reviews, and remote issues.  
+Date: September 6, 2026 (America/New_York)
+
+Scope: current source, configuration, scripts, dependencies, runtime settings, local log samples, read-only database statistics, prior reviews, and remote issues.
+
 Revision: `08f49e79fd2eae59cd9f5c20352c737b81388d39` on `main`; matches the latest remote commit returned during this audit.
 
 ## Assessment

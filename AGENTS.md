@@ -115,6 +115,7 @@ All weights in user-facing code, config files, tool schemas, and Claude conversa
 
 ### 6.3 No Leftover Debugging Artifacts
 - Clean up `console.log` calls that aren't prefixed with a tag (`[hevy]`, `[claude]`, `[tool]`, `[telegram]`, `[fatal]`).
+- Production telemetry also uses `[startup]` for revision identity, `[http]` for request metadata, `[turn]` for coaching stages, `[delivery]` for send results, and `[sync]` for background scan failures. Preserve these prefixes so existing log filters work. Never include credentials or request and response bodies in telemetry.
 - No commented-out code blocks, no `TODO` comments without an accompanying explanation, no scratch files.
 
 ### 6.4 Error Handling Layers

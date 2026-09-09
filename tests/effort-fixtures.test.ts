@@ -215,6 +215,16 @@ test('production dry-run evaluator launches isolated workers and emits a parseab
   }
 });
 
+test('decision evaluator rejects stale smoke evidence before starting a paid worker', () => {
+  const child = spawnSync(process.execPath, ['--import', 'tsx', path.resolve('scripts/evaluate-effort.ts'), 'decision', '5'], {
+    cwd: process.cwd(), encoding: 'utf8', timeout: 10_000,
+    env: { ...process.env, ANTHROPIC_API_KEY: 'fixture-no-network' },
+  });
+  assert.equal(child.status, 1);
+  assert.match(child.stderr, /smoke-test manifest from the current commit before any model call/);
+  assert.equal(child.stdout.trim(), '');
+});
+
 test('decision dry-run evaluator reserves the complete matrix within the strict $20 limit', () => {
   const scriptPath = path.resolve('scripts/evaluate-effort.ts');
   const child = spawnSync(process.execPath, ['--import', 'tsx', scriptPath, 'decision', '5', '--dry-run'], {

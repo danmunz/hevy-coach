@@ -4,10 +4,10 @@ import { TurnDeadlineError } from '../claude/turn-queue.js';
 import { getConfig } from '../state/config.js';
 import { summarizeWorkouts } from '../hevy/summarize.js';
 import { kilogramsToPounds } from '../hevy/utils.js';
-import type { HevyCompletedWorkout, HevyRoutineRecord } from '../hevy/types.js';
+import type { CachedWorkout, HevyRoutineRecord } from '../hevy/types.js';
 import type { WorkoutSync } from './workout-sync.js';
 
-export interface FreshContext { text: string; recentWorkouts?: string; workouts?: HevyCompletedWorkout[]; routines?: HevyRoutineRecord[]; }
+export interface FreshContext { text: string; recentWorkouts?: string; workouts?: CachedWorkout[]; routines?: HevyRoutineRecord[]; }
 export async function prepareFreshContext(sync: WorkoutSync, client: HevyToolClient, deadlineAt = Date.now()+75_000): Promise<FreshContext> {
   const routineId = getConfig('routine_id');
   const [workouts, routine] = await Promise.allSettled([

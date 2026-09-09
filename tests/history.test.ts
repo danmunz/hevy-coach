@@ -4,6 +4,26 @@ import test from 'node:test';
 import { HevyClient, buildRoutineSnapshot, routineSnapshotsMatch } from '../src/hevy/client.js';
 import { summarizeWorkouts } from '../src/hevy/summarize.js';
 
+test('exercise history distinguishes an empty history from a malformed response', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const payload of [{}, { exercise_history: null }, { exerciseHistory: {} }, null]) {
+      globalThis.fetch = async () => Response.json(payload);
+      const result = await new HevyClient('fixture').getExerciseHistory('bench');
+      assert.equal(typeof result, 'object');
+      if (typeof result !== 'string') assert.match(result.message, /Failed to fetch exercise history/);
+    }
+    for (const payload of [{ exercise_history: [] }, { exerciseHistory: [] }]) {
+      globalThis.fetch = async () => Response.json(payload);
+      const result = await new HevyClient('fixture').getExerciseHistory('bench');
+      assert.equal(typeof result, 'string');
+      assert.match(result as string, /No history found/);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('uses the dedicated dated exercise-history endpoint', async () => {
   const originalFetch = globalThis.fetch;
   const requests: string[] = [];

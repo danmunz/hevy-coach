@@ -1,4 +1,5 @@
 import type { HevyWorkoutSyncClient } from '../hevy/client.js';
+import { workoutInPounds } from '../hevy/workout-units.js';
 import { readWorkoutCache, replaceWorkoutCache } from '../state/workouts.js';
 
 // Recovery policy, not a claim about Hevy event retention.
@@ -33,7 +34,7 @@ export class WorkoutSync {
       !Number.isFinite(Date.parse(cached.checkedAt)) ||
       startedMs - this.lastFullRefreshAt >= FULL_REFRESH_INTERVAL_MS ||
       startedMs < this.lastFullRefreshAt;
-    if (fullRefresh) workouts = await this.client.getRecentWorkoutRecords(10);
+    if (fullRefresh) workouts = (await this.client.getRecentWorkoutRecords(10)).map(workoutInPounds);
     else {
       const since = new Date(Date.parse(cached.checkedAt ?? started) - 60_000).toISOString();
       const events = await this.client.getWorkoutEvents(since);
@@ -49,11 +50,11 @@ export class WorkoutSync {
         else {
           const previous = byId.get(id);
           if (previous && previous.startTime !== event.workout.startTime) refill = true;
-          byId.set(id, event.workout);
+          byId.set(id, workoutInPounds(event.workout));
         }
       }
       fullRefresh = refill;
-      workouts = refill ? await this.client.getRecentWorkoutRecords(10) : [...byId.values()];
+      workouts = refill ? (await this.client.getRecentWorkoutRecords(10)).map(workoutInPounds) : [...byId.values()];
     }
     const timestamp = (value: string | undefined): number => {
       const parsed = Date.parse(value ?? '');

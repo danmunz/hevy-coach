@@ -219,6 +219,7 @@ function loadProductionSmokeManifest(model: string): { valid: boolean; manifestS
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as ProductionSmokeManifest & { sourceArtifactSha256?: string; sourceCommitSha?: string };
     const valid = manifest.sourceArtifactSha256 === PRODUCTION_SMOKE_ARTIFACT_SHA256 &&
       manifest.sourceCommitSha === PRODUCTION_SMOKE_SOURCE_COMMIT &&
+      manifest.sourceCommitSha === currentCommitSha() &&
       manifest.model === model &&
       manifest.mode === 'production' &&
       manifest.repetitions === 1 &&
@@ -459,8 +460,8 @@ function runParent(): void {
   const productionSmoke = isDecisionCampaign
     ? loadProductionSmokeManifest(model)
     : { valid: false, manifestSha256: null, artifactSha256: null, sourceCommit: null };
-  if (isDecisionCampaign && !productionSmoke.valid) {
-    throw new Error('Decision campaign requires a valid frozen production-limit smoke-test manifest before any model call.');
+  if (isDecisionCampaign && !dryRun && !productionSmoke.valid) {
+    throw new Error('Decision campaign requires a valid production-limit smoke-test manifest from the current commit before any model call.');
   }
   if (isDecisionCampaign && !dryRun && !isWorktreeClean()) {
     throw new Error('Decision campaign requires a clean Git worktree before any model call.');

@@ -54,6 +54,12 @@ export interface HevyCompletedWorkout {
   exercises: HevyCompletedWorkoutExercise[];
 }
 
+/** Internal workout representation. Weights remain in pounds after ingestion. */
+export type CachedWorkoutSet = Omit<HevyCompletedWorkoutSet, 'weightKg'> & { weightLbs?: number | null };
+export type CachedWorkout = Omit<HevyCompletedWorkout, 'exercises'> & {
+  exercises: Array<Omit<HevyCompletedWorkoutExercise, 'sets'> & { sets: CachedWorkoutSet[] }>;
+};
+
 /** A single set returned by Hevy's exercise-history endpoint. */
 export interface HevyExerciseHistoryEntry {
   workoutId: string;
