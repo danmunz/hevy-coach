@@ -1,0 +1,102 @@
+[
+  {
+    "display_name": "Bench Press",
+    "template_id": "79D0BB3A",
+    "hevy_title": "Bench Press"
+  },
+  {
+    "display_name": "Cable Crunch",
+    "template_id": "23A48484",
+    "hevy_title": "Cable Crunch"
+  },
+  {
+    "display_name": "Deadlift",
+    "template_id": "C6272009",
+    "hevy_title": "Deadlift"
+  },
+  {
+    "display_name": "Face Pull",
+    "template_id": "BE640BA0",
+    "hevy_title": "Face Pull"
+  },
+  {
+    "display_name": "Front Squat",
+    "template_id": "5046D0A9",
+    "hevy_title": "Front Squat"
+  },
+  {
+    "display_name": "Good Morning",
+    "template_id": "4180C405",
+    "hevy_title": "Good Morning"
+  },
+  {
+    "display_name": "Hanging Knee Raise",
+    "template_id": "08590920",
+    "hevy_title": "Hanging Knee Raise"
+  },
+  {
+    "display_name": "Incline Bench Press (Dumbbell)",
+    "template_id": "07B38369",
+    "hevy_title": "Incline Bench Press (Dumbbell)"
+  },
+  {
+    "display_name": "Lat Pulldown",
+    "template_id": "6A6C31A5",
+    "hevy_title": "Lat Pulldown"
+  },
+  {
+    "display_name": "Lateral Raise",
+    "template_id": "422B08F1",
+    "hevy_title": "Lateral Raise"
+  },
+  {
+    "display_name": "Lunge",
+    "template_id": "5E1A7777",
+    "hevy_title": "Lunge"
+  },
+  {
+    "display_name": "Overhead Press",
+    "template_id": "7B8D84E8",
+    "hevy_title": "Overhead Press"
+  },
+  {
+    "display_name": "Pull Up",
+    "template_id": "1B2B1E7C",
+    "hevy_title": "Pull Up"
+  },
+  {
+    "display_name": "Seated Row",
+    "template_id": "F1D60854",
+    "hevy_title": "Seated Row"
+  },
+  {
+    "display_name": "Seated Row (V Grip)",
+    "template_id": "0393F233",
+    "hevy_title": "Seated Row (V Grip)"
+  },
+  {
+    "display_name": "Squat",
+    "template_id": "D04AC939",
+    "hevy_title": "Squat"
+  },
+  {
+    "display_name": "Tricep Pushdown",
+    "template_id": "93A552C6",
+    "hevy_title": "Tricep Pushdown"
+  },
+  {
+    "display_name": "Triceps Extension (Dumbbell)",
+    "template_id": "3765684D",
+    "hevy_title": "Triceps Extension (Dumbbell)"
+  },
+  {
+    "display_name": "Triceps Pushdown",
+    "template_id": "93A552C6",
+    "hevy_title": "Triceps Pushdown"
+  },
+  {
+    "display_name": "Triceps Rope Pushdown",
+    "template_id": "94B7239B",
+    "hevy_title": "Triceps Rope Pushdown"
+  }
+]

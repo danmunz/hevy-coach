@@ -114,6 +114,8 @@ export interface ChatOptions {
   maxRequestBytes?: number;
   /** Evaluation-only control that removes prompt-cache markers from the request. */
   disablePromptCache?: boolean;
+  /** Receives a prepared draft after its exact proposal enters the final reply. */
+  onPreparedDraft?: (draftId: string) => void;
 }
 
 function throwIfDeadlineExpired(deadlineAt: number | undefined): void {
@@ -235,6 +237,7 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
     return outcome;
   };
   const preToolText: string[] = [];
+  let preparedDraft: { id: string; proposal: string } | undefined;
 
   while (iterations < maxToolIterations) {
     iterations++;
@@ -325,7 +328,10 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
     if (response.stop_reason !== 'tool_use') {
       // No more tool calls. Use this iteration's text; only when it is empty
       // fall back to whatever Claude said before its tool calls.
-      const finalText = iterationText || preToolText.join('\n\n');
+      const responseText = iterationText || preToolText.join('\n\n');
+      const finalText = preparedDraft
+        ? [responseText, preparedDraft.proposal].filter(Boolean).join('\n\n')
+        : responseText;
 
       // Falling back means Claude finished without answering and the user gets
       // a stale "let me check…" preamble instead. Say so loudly — this used to
@@ -348,6 +354,7 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
       if (persist && finalText) {
         addMessagePair(userMessage, finalText);
       }
+      if (preparedDraft && finalText) options.onPreparedDraft?.(preparedDraft.id);
       options.onProgress?.('complete');
       return finalText;
     }
@@ -392,6 +399,16 @@ export async function chat(userMessage: string, options: ChatOptions = {}): Prom
         if (read) readCache.set(key, task);
       }
       const outcome = await task;
+      if (toolBlock.name === 'hevy_prepare_routine' && outcome.status === 'success') {
+        try {
+          const result = JSON.parse(outcome.result) as { draft_id?: unknown; proposal?: unknown };
+          if (typeof result.draft_id === 'string' && typeof result.proposal === 'string') {
+            preparedDraft = { id: result.draft_id, proposal: result.proposal };
+          }
+        } catch {
+          // A malformed result cannot mark a draft as presented.
+        }
+      }
       if (!read && outcome.status === 'success' && (toolBlock.name === 'hevy_push_routine' || toolBlock.name === 'hevy_edit_routine_exercise')) {
         freshRoutines = undefined;
         checkedRoutineResult = undefined;

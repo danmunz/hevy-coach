@@ -212,6 +212,8 @@ export interface HevyToolClient {
     exercises: RoutineExercisePayload[],
     exerciseMap: Map<string, string>,
   ): Promise<void | HevyApiError>;
+  createRoutineSnapshot?(snapshot: HevyRoutineSnapshot): Promise<{ routineId: string } | HevyApiError>;
+  updateRoutineSnapshot?(routineId: string, snapshot: HevyRoutineSnapshot): Promise<void | HevyApiError>;
   searchExerciseTemplates(query: string): Promise<HevyTemplateMatch[]>;
 }
 
@@ -637,6 +639,21 @@ export class HevyClient {
     }
   }
 
+  /** Creates a routine from IDs selected before the write boundary. */
+  async createRoutineSnapshot(snapshot: HevyRoutineSnapshot): Promise<{ routineId: string } | HevyApiError> {
+    try {
+      const payload = await this.fetchJson<Record<string, unknown>>('/routines', {
+        method: 'POST', body: JSON.stringify(buildRoutineBodyFromSnapshot(snapshot)),
+      });
+      const routine = (payload.routine ?? payload) as Record<string, unknown>;
+      const routineId = typeof routine.id === 'string' ? routine.id : String(routine.id ?? '');
+      if (!routineId) return apiError('Routine was created but no ID was returned.', 'Check the Hevy app before another write.');
+      return { routineId };
+    } catch (error) {
+      return apiError(`Failed to create routine: ${error instanceof Error ? error.message : String(error)}`, 'Check the Hevy app before another write.');
+    }
+  }
+
   /**
    * Updates an existing routine in Hevy.
    *
@@ -661,6 +678,17 @@ export class HevyClient {
         `Failed to update routine "${routineId}": ${msg}`,
         "Verify the routine ID exists and the API key has write access.",
       );
+    }
+  }
+
+  /** Updates a routine from IDs selected before the write boundary. */
+  async updateRoutineSnapshot(routineId: string, snapshot: HevyRoutineSnapshot): Promise<void | HevyApiError> {
+    try {
+      await this.fetchJson<unknown>(`/routines/${encodeURIComponent(routineId)}`, {
+        method: 'PUT', body: JSON.stringify(buildRoutineBodyFromSnapshot(snapshot)),
+      });
+    } catch (error) {
+      return apiError(`Failed to update routine "${routineId}": ${error instanceof Error ? error.message : String(error)}`, 'Check the Hevy app before another write.');
     }
   }
 
@@ -728,12 +756,19 @@ export class HevyClient {
         templates.push({
           id: typeof r.id === "string" ? r.id : String(r.id ?? ""),
           title: templateTitle,
+          type: typeof r.type === "string" ? r.type : undefined,
+          equipment: typeof r.equipment === "string" ? r.equipment : undefined,
           primaryMuscleGroup:
             typeof r.primary_muscle_group === "string"
               ? r.primary_muscle_group
               : typeof r.primaryMuscleGroup === "string"
                 ? r.primaryMuscleGroup
                 : undefined,
+          secondaryMuscleGroups: Array.isArray(r.secondary_muscle_groups)
+            ? r.secondary_muscle_groups.filter((value): value is string => typeof value === "string")
+            : Array.isArray(r.secondaryMuscleGroups)
+              ? r.secondaryMuscleGroups.filter((value): value is string => typeof value === "string")
+              : undefined,
           isCustom:
             typeof r.is_custom === "boolean"
               ? r.is_custom
@@ -845,6 +880,18 @@ function buildRoutineBody(
   };
 }
 
+/** Builds a write body from an already ID-bound routine snapshot. */
+export function buildRoutineBodyFromSnapshot(snapshot: HevyRoutineSnapshot): Record<string, unknown> {
+  return { routine: {
+    title: snapshot.title,
+    exercises: snapshot.exercises.map(exercise => ({
+      exercise_template_id: exercise.exerciseTemplateId,
+      superset_id: exercise.supersetId,
+      sets: exercise.sets.map(set => ({ type: set.type, weight_kg: set.weightKg, reps: set.reps })),
+    })),
+  } };
+}
+
 function normalizeRoutineSnapshot(value: unknown): HevyRoutineSnapshot | undefined {
   if (!value || typeof value !== "object") return undefined;
   const routine = value as Record<string, unknown>;
@@ -866,7 +913,12 @@ function normalizeRoutineSnapshot(value: unknown): HevyRoutineSnapshot | undefin
     for (const rawSet of exercise.sets) {
       if (!rawSet || typeof rawSet !== "object") return undefined;
       const set = rawSet as Record<string, unknown>;
-      const weightKg = typeof set.weight_kg === "number" ? set.weight_kg : set.weightKg;
+      // Hevy represents bodyweight routine sets with null rather than 0 kg.
+      // Internally, routine payloads use 0 so the comparison remains stable.
+      const rawWeightKg = set.weight_kg === null
+        ? null
+        : typeof set.weight_kg === "number" ? set.weight_kg : set.weightKg;
+      const weightKg = rawWeightKg === null ? 0 : rawWeightKg;
       if (typeof set.type !== "string" || typeof weightKg !== "number" || typeof set.reps !== "number") return undefined;
       sets.push({ type: set.type, weightKg, reps: set.reps });
     }

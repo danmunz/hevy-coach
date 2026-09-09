@@ -19,11 +19,15 @@ export const EXERCISE_PINS: Record<string, ExerciseLookup> = {
   "Bench Press":                    { query: "Bench Press (Barbell)", primaryMuscleGroup: "chest" },
   "Overhead Press":                 { query: "Overhead Press (Barbell)", primaryMuscleGroup: "shoulders" },
   "Front Squat":                    { query: "Front Squat", primaryMuscleGroup: "quadriceps" },
+  "Good Morning":                   { query: "Good Morning (Barbell)" },
 
   // -- Cable exercises --
   "Face Pull":                      { query: "Face Pull" },
   "Lat Pulldown":                   { query: "Lat Pulldown (Cable)", primaryMuscleGroup: "lats" },
   "Tricep Pushdown":                { query: "Triceps Pushdown" },
+  // Preserve the common plural spelling used by the Hevy template and old
+  // routine payloads. Both names identify the same movement.
+  "Triceps Pushdown":               { query: "Triceps Pushdown" },
   "Triceps Rope Pushdown":          { query: "Triceps Rope Pushdown", primaryMuscleGroup: "triceps" },
   "Cable Crunch":                   { query: "Cable Crunch", primaryMuscleGroup: "abdominals" },
   "Seated Row":                     { query: "Seated Cable Row - Bar Grip", primaryMuscleGroup: "upper_back" },

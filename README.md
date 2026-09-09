@@ -93,6 +93,21 @@ npm run chat
 
 If any API verification fails, setup tells you which one and stops. Fix the key in `.env` and re-run — setup is idempotent.
 
+### Exercise-catalog research artifact
+
+The checked-in exercise-identity study includes a frozen complete catalog and a
+two-pass equipment-compatibility review for this gym. It is deliberately not
+loaded by the production bot yet: the ID-bound draft/write migration described
+in [`docs/exercise-identity-implementation.md`](docs/exercise-identity-implementation.md)
+must land first. To reproduce the bounded research run, use:
+
+```bash
+npm run study:exercise-catalog
+```
+
+It calls the configured Anthropic model, has a precomputed cost ceiling, and
+does not call Hevy or modify the coach database.
+
 ## Running
 
 After setup completes, you have three ways to run the bot. Start with the CLI to verify everything works before going live on Telegram.
@@ -395,3 +410,5 @@ npm test
 These checks use local fixtures and do not require paid model calls. Logs identify each turn and record context time, model usage, tool outcomes, and delivery progress.
 
 Technical decisions and verification results live in [docs/](docs/). The [performance review](docs/review-sprint-closure-2026-09-07.md) records the synchronization, context, and delivery changes.
+
+The [exercise identity study](docs/review-exercise-identity-2026-09-08.md) includes an isolated, offline resolver comparison and a proposed production design. Reproduce it with `npx tsx scripts/exercise-study/run.ts`; it uses captured catalog data and makes no live requests or database writes. See the [artifact instructions](scripts/exercise-study/README.md) for source data, limitations, and optional read-only catalog acquisition.

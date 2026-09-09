@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { HevyClient } from "../src/hevy/client.js";
+import { buildRoutineBodyFromSnapshot, HevyClient } from "../src/hevy/client.js";
 import { resolveExerciseName } from "../src/hevy/exercise-pins.js";
 
 const workout = { id: "w1", title: "Session", exercises: [
@@ -8,6 +8,18 @@ const workout = { id: "w1", title: "Session", exercises: [
     { type: "warmup", weight_kg: 20, reps: 5, rpe: 4 },
   ] },
 ] };
+
+test('ID-bound routine bodies retain the selected template IDs', () => {
+  const body = buildRoutineBodyFromSnapshot({
+    title: 'ID fixture',
+    exercises: [{ exerciseTemplateId: 'opaque-not-a-name', supersetId: null,
+      sets: [{ type: 'normal', weightKg: 61.235, reps: 5 }] }],
+  });
+  assert.deepEqual(body, { routine: { title: 'ID fixture', exercises: [{
+    exercise_template_id: 'opaque-not-a-name', superset_id: null,
+    sets: [{ type: 'normal', weight_kg: 61.235, reps: 5 }],
+  }] } });
+});
 
 test("events preserve order and normalize both event shapes across all pages", async () => {
   const original = globalThis.fetch;
@@ -164,7 +176,9 @@ test("home gym pins select cable rows and exclude dips", async () => {
     { id: "F1D60854", title: "Seated Cable Row - Bar Grip", primaryMuscleGroup: "upper_back" },
     { id: "0393F233", title: "Seated Cable Row - V Grip (Cable)", primaryMuscleGroup: "upper_back" },
     { id: "5046D0A9", title: "Front Squat", primaryMuscleGroup: "quadriceps" },
+    { id: "4180C405", title: "Good Morning (Barbell)" },
     { id: "BE640BA0", title: "Face Pull" },
+    { id: "93A552C6", title: "Triceps Pushdown" },
     { id: "94B7239B", title: "Triceps Rope Pushdown", primaryMuscleGroup: "triceps" },
   ];
   const map = await resolveExerciseMap(async (query) =>
@@ -174,7 +188,9 @@ test("home gym pins select cable rows and exclude dips", async () => {
   assert.equal(map.get("Seated Row (V Grip)"), "0393F233");
   assert.equal(EXERCISE_PINS["Dips"], undefined);
   assert.equal(map.get("Front Squat"), "5046D0A9");
+  assert.equal(map.get("Good Morning"), "4180C405");
   assert.equal(map.get("Face Pull"), "BE640BA0");
+  assert.equal(map.get("Triceps Pushdown"), "93A552C6");
   assert.equal(map.get("Triceps Rope Pushdown"), "94B7239B");
   assert.equal(EXERCISE_PINS["Seated Row"].query, "Seated Cable Row - Bar Grip");
 });

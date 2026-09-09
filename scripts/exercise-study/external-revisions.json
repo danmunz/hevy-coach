@@ -1,0 +1,37 @@
+[
+  {
+    "repo": "chrisdoc/hevy-mcp",
+    "sha": "a324a765e98f2a1b212804637999c7d61edd6824",
+    "date": "2026-09-07T20:04:31Z"
+  },
+  {
+    "repo": "diecoscai/hevy-mcp",
+    "sha": "b3a8016b6dcb69b332cee94610b538f8577cd4c1",
+    "date": "2026-05-27T15:52:27Z"
+  },
+  {
+    "repo": "bondbenbond/hevy-mcp",
+    "sha": "4dbf15fc8000f938f776cddca7b314b61859e24c",
+    "date": "2026-07-15T21:34:38Z"
+  },
+  {
+    "repo": "gossamr/swift-workout-importer",
+    "sha": "5db7790a1955cf03a73b5451a88092fbde55c43d",
+    "date": "2026-05-10T19:09:59Z"
+  },
+  {
+    "repo": "StartupBros-com/fitbod-hevy-migration",
+    "sha": "a869223b012e142a8c2959638bf0ed2d2f341483",
+    "date": "2026-01-10T20:50:35Z"
+  },
+  {
+    "repo": "thebruge/hevy-workout-creator",
+    "sha": "9c38ed55b6ddd84b60c21970c8bd79192ba8b26c",
+    "date": "2026-03-25T20:01:36Z"
+  },
+  {
+    "repo": "Easty11/hevy-client",
+    "sha": "771d6c41d40ce778d3f7ca812012c0471f53fafa",
+    "date": "2026-06-24T10:44:56Z"
+  }
+]

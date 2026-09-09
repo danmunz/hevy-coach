@@ -134,3 +134,25 @@ test('normalizes a routine detail for safe overwrite comparison', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('normalizes Hevy bodyweight routine sets represented with null weight', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({
+    routine: {
+      title: 'Fixture',
+      exercises: [{
+        exercise_template_id: 'push-up',
+        superset_id: null,
+        sets: [{ type: 'normal', weight_kg: null, reps: 15 }],
+      }],
+    },
+  });
+  try {
+    const result = await new HevyClient('fixture').getRoutineSnapshot('routine-1');
+    assert.equal('error' in result, false);
+    if ('error' in result) return;
+    assert.deepEqual(result.exercises[0].sets, [{ type: 'normal', weightKg: 0, reps: 15 }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

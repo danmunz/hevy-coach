@@ -1,4 +1,4 @@
-import { kilogramsToPounds } from '../hevy/utils.js';
+import { kilogramsToPounds, poundsToRoundedKilograms } from '../hevy/utils.js';
 import { buildRoutineSnapshot, routineSnapshotsMatch, type HevyToolClient } from "../hevy/client.js";
 import type { RoutineExercisePayload, RoutinePayload } from "../hevy/types.js";
 import { resolveExerciseName } from "../hevy/exercise-pins.js";
@@ -6,6 +6,9 @@ import { getConfig, getTrainingMaxes, setTrainingMaxes } from "../state/config.j
 import { saveNote, clearNote } from "../state/notes.js";
 import { getDb } from "../state/db.js";
 import { clearPendingHevyMutation, confirmHevyMutation, getPendingHevyMutation, markHevyMutationPending } from "../state/routine-state.js";
+import { findCatalogCandidates, getCatalogStatus } from '../state/exercise-catalog.js';
+import { createRoutineDraft, getRoutineDraft, markRoutineDraftConfirmed } from '../state/routine-drafts.js';
+import { getApprovedCatalogCandidate } from '../state/exercise-catalog.js';
 
 export interface ToolOutcome {
   result: string;
@@ -178,6 +181,7 @@ export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
   'hevy_get_recent_workouts',
   'hevy_get_exercise_history',
   'hevy_get_routines',
+  'hevy_find_exercises',
 ]);
 
 export function validateWorkoutCount(value: unknown): number {
@@ -232,12 +236,12 @@ export class ToolExecutor {
       throw new ToolResultError(`Demo mode blocked ${toolName}. Reads are live, but notes, training maxes, and Hevy writes are disabled.`, 'blocked');
     }
     if (
-      (toolName === "hevy_push_routine" || toolName === "hevy_edit_routine_exercise") &&
+      (toolName === "hevy_push_routine" || toolName === "hevy_edit_routine_exercise" || toolName === 'hevy_push_draft') &&
       this.options.allowHevyWrites === false
     ) {
       throw new ToolResultError(`Demo mode blocked ${toolName}. It can update scratch coaching state, but never changes a live Hevy routine.`, 'blocked');
     }
-    if ((toolName === "hevy_push_routine" || toolName === "hevy_edit_routine_exercise") && getPendingHevyMutation()) {
+    if ((toolName === "hevy_push_routine" || toolName === "hevy_edit_routine_exercise" || toolName === 'hevy_push_draft') && getPendingHevyMutation()) {
       throw new ToolResultError('A previous Hevy routine write has an unknown outcome. Check Hevy and resolve that write before changing the routine again.', 'blocked');
     }
     // Keep READ_ONLY_TOOLS in sync with the cases below when adding a tool.
@@ -248,6 +252,12 @@ export class ToolExecutor {
         return await this.getExerciseHistory(toolInput);
       case "hevy_get_routines":
         return await this.getRoutines(toolInput);
+      case "hevy_find_exercises":
+        return this.findExercises(toolInput);
+      case "hevy_prepare_routine":
+        return this.prepareRoutine(toolInput);
+      case 'hevy_push_draft':
+        return await this.pushDraft(toolInput);
       case "hevy_push_routine":
         return await this.pushRoutine(toolInput);
       case "hevy_edit_routine_exercise":
@@ -259,7 +269,7 @@ export class ToolExecutor {
       case "update_training_maxes":
         return await this.handleUpdateTrainingMaxes(toolInput);
       default:
-        throw new ToolResultError(`Unknown tool "${toolName}". Available tools: hevy_get_recent_workouts, hevy_get_exercise_history, hevy_get_routines, hevy_push_routine, hevy_edit_routine_exercise, save_note, clear_note, update_training_maxes.`);
+        throw new ToolResultError(`Unknown tool "${toolName}". Available tools: hevy_get_recent_workouts, hevy_get_exercise_history, hevy_get_routines, hevy_find_exercises, hevy_push_routine, hevy_edit_routine_exercise, save_note, clear_note, update_training_maxes.`);
     }
   }
 
@@ -332,6 +342,131 @@ export class ToolExecutor {
       (r) => `- ${r.title} (id: ${r.id})`,
     );
     return `Routines:\n${lines.join("\n")}`;
+  }
+
+  private findExercises(input: Record<string, unknown>): string {
+    const query = typeof input.query === 'string' ? input.query.trim() : '';
+    const templateId = typeof input.exercise_template_id === 'string' ? input.exercise_template_id.trim() : '';
+    if (!query && !templateId) {
+      throw new ToolResultError('Provide an exercise name or an exercise_template_id.');
+    }
+    const catalog = getCatalogStatus();
+    if (!catalog.revision || !catalog.complete) {
+      throw new ToolResultError('The exercise catalog is not ready. Run npm run catalog:refresh before using this tool.', 'blocked');
+    }
+    const candidates = findCatalogCandidates(query, templateId || undefined);
+    return JSON.stringify({
+      catalog_revision: catalog.revision,
+      equipment_revision: catalog.equipmentRevision,
+      candidates: candidates.map(candidate => ({
+        exercise_template_id: candidate.id,
+        official_title: candidate.title,
+        type: candidate.type ?? null,
+        equipment: candidate.equipment ?? null,
+        primary_muscle_group: candidate.primaryMuscleGroup ?? null,
+        secondary_muscle_groups: candidate.secondaryMuscleGroups,
+        is_custom: candidate.isCustom,
+        compatibility: candidate.compatibility ? {
+          status: candidate.compatibility.status,
+          reason_code: candidate.compatibility.reasonCode,
+          reviewed: candidate.compatibility.source === 'reviewed',
+        } : null,
+        supported_for_routine_write: candidate.supportedForRoutineWrite,
+      })),
+    });
+  }
+
+  private prepareRoutine(input: Record<string, unknown>): string {
+    const title = typeof input.title === 'string' ? input.title.trim() : '';
+    const rawExercises = Array.isArray(input.exercises) ? input.exercises : [];
+    if (!title || title.length >= 40 || /\d{4}-\d{2}-\d{2}/.test(title)) {
+      throw new ToolResultError('Provide a routine title with fewer than 40 characters and no date.');
+    }
+    if (!rawExercises.length) throw new ToolResultError('Provide at least one exercise to prepare a routine.');
+    const catalog = getCatalogStatus();
+    if (!catalog.revision || !catalog.equipmentRevision || !catalog.complete) {
+      throw new ToolResultError('The exercise catalog is not ready. Run npm run catalog:refresh before preparing a routine.', 'blocked');
+    }
+    const exercises = rawExercises.map((raw, index) => {
+      if (!raw || typeof raw !== 'object') throw new ToolResultError(`Exercise ${index + 1} must be an object.`);
+      const value = raw as Record<string, unknown>;
+      const templateId = typeof value.exercise_template_id === 'string' ? value.exercise_template_id.trim() : '';
+      if (!templateId) throw new ToolResultError(`Exercise ${index + 1} needs an exercise_template_id.`);
+      if (!Array.isArray(value.sets) || !value.sets.length) throw new ToolResultError(`Exercise ${index + 1} needs one or more sets.`);
+      const candidate = getApprovedCatalogCandidate(templateId);
+      const sets = parseSetInputs(value.sets, candidate.title);
+      if (candidate.type === 'reps_only' && sets.some(set => set.weightLbs !== 0)) {
+        throw new ToolResultError(`"${candidate.title}" uses reps_only. Set weight_lbs to 0.`);
+      }
+      return {
+        occurrenceId: `${index + 1}-${templateId}`,
+        templateId, officialTitle: candidate.title, metricType: candidate.type!,
+        supersetId: typeof value.superset_id === 'number' ? value.superset_id : undefined,
+        sets,
+      };
+    });
+    const draft = createRoutineDraft({ title, exercises, catalogRevision: catalog.revision,
+      equipmentRevision: catalog.equipmentRevision, targetRoutineId: getConfig('routine_id') });
+    const proposal = draft.exercises.map(exercise => {
+      const sets = exercise.sets.map(set => `${set.type === 'warmup' ? 'warmup ' : ''}${set.weightLbs}x${set.reps}`).join(', ');
+      return `- ${exercise.officialTitle}: ${sets}`;
+    }).join('\n');
+    return JSON.stringify({ draft_id: draft.draftId, status: draft.status, proposal: `${draft.title}\n${proposal}` });
+  }
+
+  private async pushDraft(input: Record<string, unknown>): Promise<string> {
+    const draftId = typeof input.draft_id === 'string' ? input.draft_id : '';
+    const draft = draftId ? getRoutineDraft(draftId) : undefined;
+    if (!draft) throw new ToolResultError('The draft does not exist. Prepare a new routine.');
+    if (draft.status !== 'presented') throw new ToolResultError('The draft was not fully delivered. Present the draft before writing it.', 'blocked');
+    const catalog = getCatalogStatus();
+    if (catalog.revision !== draft.catalogRevision || catalog.equipmentRevision !== draft.equipmentRevision) {
+      throw new ToolResultError('The catalog or equipment rules changed after this draft. Prepare and approve a new draft.', 'blocked');
+    }
+    const snapshot = {
+      title: draft.title,
+      exercises: draft.exercises.map(exercise => {
+        getApprovedCatalogCandidate(exercise.templateId);
+        return { exerciseTemplateId: exercise.templateId, supersetId: exercise.supersetId ?? null,
+          sets: exercise.sets.map(set => ({ type: set.type, weightKg: poundsToRoundedKilograms(set.weightLbs), reps: set.reps })) };
+      }),
+    };
+    const exerciseMap = new Map(draft.exercises.map(exercise => [exercise.officialTitle.toLowerCase(), exercise.templateId]));
+    const payload: RoutinePayload = { title: draft.title, exercises: draft.exercises.map(exercise => ({
+      name: exercise.officialTitle, supersetId: exercise.supersetId, sets: exercise.sets,
+    })) };
+    const routineId = draft.targetRoutineId;
+    const overwrite = input.overwrite_external_changes === true;
+    if (routineId && !overwrite) {
+      const remote = await this.hevyClient.getRoutineSnapshot(routineId);
+      if ('error' in remote) throw new ToolResultError(`I could not check the Hevy routine: ${remote.message}`, 'blocked');
+      const cached = getConfig('last_routine_snapshot');
+      if (!cached || !routineSnapshotsMatch(JSON.parse(cached), remote)) {
+        throw new ToolResultError('The routine changed in Hevy or has no ID-bound baseline. Ask the user before replacing it.', 'blocked');
+      }
+    }
+    if (routineId) {
+      if (!this.hevyClient.updateRoutineSnapshot) throw new ToolResultError('This Hevy client does not support ID-bound routine writes.', 'blocked');
+      markHevyMutationPending('update', payload, routineId, Object.fromEntries(exerciseMap));
+      const result = await this.hevyClient.updateRoutineSnapshot(routineId, snapshot);
+      if (result && 'error' in result) {
+        clearKnownFailedMutation(result.message);
+        throw new ToolResultError(`Could not update the routine: ${result.message}`);
+      }
+      confirmHevyMutation(routineId, payload, Object.fromEntries(exerciseMap));
+    } else {
+      if (!this.hevyClient.createRoutineSnapshot) throw new ToolResultError('This Hevy client does not support ID-bound routine writes.', 'blocked');
+      markHevyMutationPending('create', payload, undefined, Object.fromEntries(exerciseMap));
+      const result = await this.hevyClient.createRoutineSnapshot(snapshot);
+      if ('error' in result) {
+        clearKnownFailedMutation(result.message);
+        throw new ToolResultError(`Could not create the routine: ${result.message}`);
+      }
+      confirmHevyMutation(result.routineId, payload, Object.fromEntries(exerciseMap));
+    }
+    getDb().prepare(`INSERT OR REPLACE INTO config (key, value, updated_at) VALUES ('last_routine_snapshot', ?, datetime('now'))`).run(JSON.stringify(snapshot));
+    markRoutineDraftConfirmed(draft.draftId);
+    return `Routine draft ${draft.draftId} is now in Hevy.`;
   }
 
   private async pushRoutine(

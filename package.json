@@ -11,6 +11,8 @@
     "evaluate:effort:pair": "tsx scripts/evaluate-effort.ts pair 5",
     "evaluate:effort:decision": "tsx scripts/evaluate-effort.ts decision 5",
     "evaluate:effort:production": "tsx scripts/evaluate-effort.ts production 1",
+    "study:exercise-catalog": "tsx scripts/exercise-study/classify-catalog.ts",
+    "catalog:refresh": "tsx scripts/refresh-exercise-catalog.ts",
     "recover:hevy": "tsx scripts/reconcile-pending-hevy-mutation.ts",
     "test": "tsx --test tests/**/*.test.ts",
     "typecheck": "tsc -p tsconfig.check.json --noEmit",

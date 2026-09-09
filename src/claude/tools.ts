@@ -43,6 +43,64 @@ export const TOOLS: Anthropic.Tool[] = [
       properties: { routine_id: { type: 'string', description: 'Pass a routine ID to get all exercise and set details. Omit this field to list routines.' }, refresh: { type: 'boolean', description: 'Set true to check Hevy again and replace the checked routine data.' } },
     },
   },
+  {
+    name: 'hevy_find_exercises',
+    description:
+      'Find official Hevy exercise templates in the local catalog. Use this before preparing a new routine. Inspect the returned ID, title, equipment decision, and write support. Do not use an unavailable or review result in a routine.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Exercise name or movement description.' },
+        exercise_template_id: { type: 'string', description: 'Optional exact Hevy template ID.' },
+      },
+    },
+  },
+  {
+    name: 'hevy_prepare_routine',
+    description:
+      'Create an ID-bound routine draft. Use only official template IDs returned by hevy_find_exercises. This tool does not write to Hevy. Show the returned proposal and wait for approval before pushing it.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Routine title, fewer than 40 characters, with no date.' },
+        exercises: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              exercise_template_id: { type: 'string', description: 'Official Hevy template ID.' },
+              superset_id: { type: 'number', description: 'Optional superset group number.' },
+              sets: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    weight_lbs: { type: 'number' }, reps: { type: 'number' }, count: { type: 'number' }, warmup: { type: 'boolean' },
+                  },
+                  required: ['weight_lbs', 'reps'],
+                },
+              },
+            },
+            required: ['exercise_template_id', 'sets'],
+          },
+        },
+      },
+      required: ['title', 'exercises'],
+    },
+  },
+  {
+    name: 'hevy_push_draft',
+    description:
+      'Write one previously presented routine draft to Hevy. Call only after the user approves that draft. Do not send exercise names, IDs, titles, or sets in this call.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        draft_id: { type: 'string', description: 'The draft_id returned by hevy_prepare_routine.' },
+        overwrite_external_changes: { type: 'boolean', description: 'Set true only after the user confirms replacement of changes in Hevy.' },
+      },
+      required: ['draft_id'],
+    },
+  },
 
   // --- Hevy: Write ---
   {

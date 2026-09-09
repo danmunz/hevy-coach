@@ -11,6 +11,7 @@ import { TurnQueue } from './claude/turn-queue.js';
 import { safeErrorFields, sendSplitMessages } from './telegram/client.js';
 
 import { handleMessageTurn } from './telegram/handler.js';
+import { markRoutineDraftPresented } from './state/routine-drafts.js';
 
 // ---------------------------------------------------------------------------
 // Global error handlers
@@ -83,6 +84,7 @@ bot.on('text', async (ctx) => {
   // must never prevent the queued coaching turn from running.
   const receivedAt = Date.now();
   const turnId = randomUUID();
+  let preparedDraftId: string | undefined;
   console.log(`[turn] id=${turnId} event=received`);
   void ctx.replyWithChatAction('typing').catch(() => undefined);
   void ctx.react('👀').catch(() => undefined);
@@ -100,7 +102,13 @@ bot.on('text', async (ctx) => {
     await handleMessageTurn({
       queue: turnQueue,
       receivedAt,
-      deliver: (text, deadlineAt) => sendSplitMessages(ctx, text, event => console.log(`[delivery] id=${turnId} ${JSON.stringify(event)}`), { deadlineAt }),
+      deliver: async (text, deadlineAt) => {
+        await sendSplitMessages(ctx, text, event => console.log(`[delivery] id=${turnId} ${JSON.stringify(event)}`), { deadlineAt });
+        if (preparedDraftId) {
+          markRoutineDraftPresented(preparedDraftId);
+          preparedDraftId = undefined;
+        }
+      },
       logFailure: fields => console.error(`[turn] id=${turnId} status=failed total_ms=${Date.now()-receivedAt}`, fields),
       coach: async (turn) => {
         console.log(`[turn] id=${turnId} queue_ms=${turn.queueWaitMs} budget_ms=${turn.deadlineAt - turn.startedAt}`);
@@ -113,6 +121,7 @@ bot.on('text', async (ctx) => {
           freshContext: context.text,
           freshWorkouts: context.workouts,
           freshRoutines: context.routines,
+          onPreparedDraft: draftId => { preparedDraftId = draftId; },
           onProgress: (stage) => {
             console.log(`[turn] id=${turnId} stage=${stage}`);
             const reaction = stage === 'running_tools' ? '⚡' : stage === 'calling_model' ? '✍' : undefined;

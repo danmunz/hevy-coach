@@ -5,7 +5,10 @@ export type HevySetType = "warmup" | "normal" | "failure" | "dropset";
 export interface HevyTemplateMatch {
   id: string;
   title: string;
+  type?: string;
+  equipment?: string;
   primaryMuscleGroup?: string;
+  secondaryMuscleGroups?: string[];
   isCustom?: boolean;
 }
 

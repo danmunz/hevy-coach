@@ -6,6 +6,7 @@ import { getDb } from '../src/state/db.js';
 import { seedDefaults } from '../src/state/config.js';
 import { HevyClient } from '../src/hevy/client.js';
 import { EXERCISE_PINS, resolveExerciseMap } from '../src/hevy/exercise-pins.js';
+import { installExerciseCatalog } from '../src/state/exercise-catalog.js';
 import Anthropic from '@anthropic-ai/sdk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -129,6 +130,9 @@ async function verifyApis(): Promise<ApiResults> {
 
 async function cacheExerciseTemplates(): Promise<{ resolved: number; total: number; failed: string[] }> {
   const client = new HevyClient();
+  const catalog = await client.fetchAllTemplates();
+  const catalogStatus = installExerciseCatalog(catalog);
+  ok(`Exercise catalog: ${catalogStatus.templateCount} templates stored`);
   const total = Object.keys(EXERCISE_PINS).length;
 
   const searchFn = (query: string) => client.searchExerciseTemplates(query);

@@ -1,0 +1,2394 @@
+{
+  "generatedAt": "2026-09-09T02:35:03.746Z",
+  "model": "claude-sonnet-5",
+  "catalog": {
+    "fetchedAt": "2026-09-08T12:23:34.143Z",
+    "sha256": "2867a87729c8897de506661770975d6faf3c4602b8f5e3ba7bbce77c1ff2c4c0",
+    "count": 455
+  },
+  "methodology": {
+    "passes": [
+      "initial",
+      "independent_audit"
+    ],
+    "maxCalls": 92,
+    "completedCalls": 92,
+    "sdkRetries": 0,
+    "chunkSize": 20,
+    "maxRequestBytes": 32000,
+    "maxOutputTokens": 4096
+  },
+  "budget": {
+    "authorizedUsd": 10,
+    "maximumReservedUsd": 9.65632,
+    "observedUsd": 0.732612,
+    "pricingUsdPerMillionTokens": {
+      "input": 2,
+      "output": 10
+    }
+  },
+  "usage": {
+    "input_tokens": 110381,
+    "output_tokens": 51185
+  },
+  "decisions": [
+    {
+      "id": "3BC06AD3",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "B4F2FF72",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "99D5F10E",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "5E0DDACE",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "43573BB8",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "A69FF221",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "D4A2FE7E",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "5BFF35BA",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "4F5866F8",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "A05C064D",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "091737FA",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "F51D9080",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "E8D86EE8",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "9c38cd1a-03ad-462c-9332-573da0de45a8",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "084A67CA",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "B3B1D947",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "2DBCA395",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "DDB29047",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "3D1CDC75",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "CD6DC8E5",
+      "status": "unavailable",
+      "reason_code": "PROHIBITED_DIPS"
+    },
+    {
+      "id": "79D0BB3A",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "99C1F2AD",
+      "status": "unavailable",
+      "reason_code": "MISSING_ATTACHMENT"
+    },
+    {
+      "id": "35B51B87",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "3601968B",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "0FBF7195",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "E644F828",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "EA820646",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "55E6546F",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "23E92538",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "EB813C91",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "A5AC6449",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "ADA8623C",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "37FCC2BB",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "AF328E3D",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "0B4C1902",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "A41C7261",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "594450D2",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "BD0AD077",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "c6572171-5bd3-4722-9cd0-917fa9f64de7",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "A0D8FA1B",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "56092DD1",
+      "status": "unavailable",
+      "reason_code": "MISSING_BOX"
+    },
+    {
+      "id": "38FC1AB9",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "0F24286A",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "B5D3A742",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "BB792A36",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "115CC72C",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "86B00DDE",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "9DCE2D64",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "CC55119B",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "23A48484",
+      "status": "review",
+      "reason_code": "MISSING_ATTACHMENT"
+    },
+    {
+      "id": "651F844C",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "8C331CD8",
+      "status": "review",
+      "reason_code": "MISSING_ATTACHMENT"
+    },
+    {
+      "id": "92D858EA",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "A2D838BD",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "47B9DF13",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "91237BDD",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "6FCD7755",
+      "status": "unavailable",
+      "reason_code": "PROHIBITED_DIPS"
+    },
+    {
+      "id": "E9E4089F",
+      "status": "unavailable",
+      "reason_code": "PROHIBITED_DIPS"
+    },
+    {
+      "id": "29472BE1",
+      "status": "unavailable",
+      "reason_code": "PROHIBITED_DIPS"
+    },
+    {
+      "id": "DDB7C19F",
+      "status": "unavailable",
+      "reason_code": "MISSING_BAND"
+    },
+    {
+      "id": "12017185",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "78683336",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "720B0D70",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "EAC7D9C5",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "7EB3F7C3",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "914F3A96",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "B582299E",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "6A8D3193",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "F21D5693",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "29083183",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "D23C609B",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "023943F1",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "CC016611",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "10D76E8F",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "ABB00838",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "9E09CEC3",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "D3095577",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "652FEA39",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "E23F1F2B",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "724CDE60",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "32C4D4A2",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "DCF3B31B",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "EB43ADD4",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "8a78d4fa-5ce7-4c61-91d5-a4ff0f5a1e2c",
+      "status": "review",
+      "reason_code": "CUSTOM_UNKNOWN"
+    },
+    {
+      "id": "D928C232",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "D39EC9EB",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "D8F7F851",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "D8911FC4",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "B9380898",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "99507114",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "C6272009",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "5F4E6DD3",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "FA5D0DE1",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "20870ED5",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "B923B230",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "DA0F0470",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "18487FA7",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "FAF31231",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "FFC106CB",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "A351AED7",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "BC10A922",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "B2398CD1",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "C43825EA",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "6575F52D",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "7DA843A3",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "D950429E",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "AFC29472",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "B7192800",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "F1E57334",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "F3717B0E",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "F72FA239",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "BF6ECE89",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "A01BE509",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "3303376C",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "01A35BF9",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "BE640BA0",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "f043c9da-00f0-415b-8c61-bd060c0cf0cb",
+      "status": "review",
+      "reason_code": "CUSTOM_UNKNOWN"
+    },
+    {
+      "id": "50C613D0",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "867AC3B6",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "2AF8B552",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "D53F2886",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "756EE329",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "A57D38D5",
+      "status": "unavailable",
+      "reason_code": "PROHIBITED_DIPS"
+    },
+    {
+      "id": "2FA77B28",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "207DC636",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "F6948F17",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "0E608350",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "30F03BF0",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "47B036EF",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "BD86EFD5",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "DBB91A3C",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "8293E554",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "796E8E2C",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "5046D0A9",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "1283BBA6",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "CDA23948",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "49C922A1",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "68B83EE0",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "CBA02382",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "987234AB",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "3D0C7C75",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "4180C405",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "05487216",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "AC5A4C58",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "1E42FD5F",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "1D4B3D6B",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "36E8F14E",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "7E3BC8B6",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "BE3615CF",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "90B04F96",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "BD4E7E53",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "08590920",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "F8356514",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "F4E77594",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "567FB505",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "BE89C631",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "150E076B",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "C9CCB878",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "023947AB",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "1C34A172",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "C469EA70",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "F4B4C6EE",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "22578A94",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "8BEBFED6",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "92B8C7E1",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "D57C2EC7",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "DA5430FC",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "68CE0B9B",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "291ABA92",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "970ADF87",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "50DFDFAB",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "07B38369",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "3A6FA3D1",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "D3E2AB55",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "FBF92739",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "39C99849",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "425805F4",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "24706DCD",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "BC3492DA",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "91FAFBA3",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "AA1EB7D8",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "32B0B590",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "D410F649",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "74103F24",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "991833C2",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "5CC07A1F",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "040BA2E3",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "BA3DE542",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "70D4EBBF",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "55BA475A",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "F99C211D",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "4E239ED8",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "A127DA73",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "4288G454",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "9B13BA4B",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "6433CD93",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "89304423",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "F8A0FCCA",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "5F8903BF",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "A91838C0",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "D82EA543",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "B74A95BB",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "98237BA2",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "923874CA",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "D7D7FCCE",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "983274DD",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "EC02979E",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "07EBC4DC",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "DC59D143",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "F2A37357",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "DF200976",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "BE289E45",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "422B08F1",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "D5D0354D",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "D731CCA8",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "D2FE7B2E",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "6A6C31A5",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "4E5257DE",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "473CF5B8",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "75A4F6C4",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "0EB695C9",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "C7973E0E",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "0482DA98",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "293483AD",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "8A2E6481",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "6D54A050",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "5E1A7777",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "6E6EE645",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "B537D09F",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "BD5935CF",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "B8127AD1",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "09C9F635",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "22FEDCA4",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "31B8DA0F",
+      "status": "available",
+      "reason_code": "PLATE"
+    },
+    {
+      "id": "0910BD28",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "D6A73CF2",
+      "status": "available",
+      "reason_code": "PLATE"
+    },
+    {
+      "id": "C732C341",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "F49E31D6",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "9F9C164B",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "F60BDDF8",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "108D7A14",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "DBE341AA",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "B140095E",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "582ADA23",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "4C6721B9",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "54E60954",
+      "status": "available",
+      "reason_code": "PLATE"
+    },
+    {
+      "id": "7B8D84E8",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "6AC96645",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "B09A1304",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "2CFED196",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "B5EFBF9C",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "FBEE8279",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "CE1054CE",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "018ADC12",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "30E293E3",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "0EFE8162",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "EC2510CD",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "942BAD12",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "3FF6A22E",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "C6C9B8A0",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "31436F5D",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "9283ABD5",
+      "status": "available",
+      "reason_code": "PLATE"
+    },
+    {
+      "id": "DBF9273A",
+      "status": "available",
+      "reason_code": "PLATE"
+    },
+    {
+      "id": "982734D4",
+      "status": "available",
+      "reason_code": "PLATE"
+    },
+    {
+      "id": "9373FSD1",
+      "status": "available",
+      "reason_code": "PLATE"
+    },
+    {
+      "id": "C628D768",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "E22F9358",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "4F942934",
+      "status": "unavailable",
+      "reason_code": "MISSING_ATTACHMENT"
+    },
+    {
+      "id": "FAB6EB2F",
+      "status": "unavailable",
+      "reason_code": "MISSING_ATTACHMENT"
+    },
+    {
+      "id": "1E9A6B8E",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "84A77566",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "67280085",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "B123DD01",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "1B2B1E7C",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "2C37EC5E",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "56808FD2",
+      "status": "unavailable",
+      "reason_code": "MISSING_ATTACHMENT"
+    },
+    {
+      "id": "729237D1",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "542F3CD5",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "392887AA",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "947DAC23",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "19372ABC",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "FE389074",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "C315DC2A",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "E5988A0A",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "D8281C62",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "1ADF8723",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "7FD2EC3E",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "1B89CA1B",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "7952B5CD",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "112FC6B7",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "9F48F858",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "B567DD46",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "9264ADA1",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "1FF4097B",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "046E25A2",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "8B5BED30",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "7C0028C3",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "C284D923",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "818BA121",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "FFDA283B",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "99B49684",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "D8460FA6",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "51A0EDAA",
+      "status": "unavailable",
+      "reason_code": "PROHIBITED_DIPS"
+    },
+    {
+      "id": "5F09F0FC",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "AEA56BDC",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "2B4B7310",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "72CFFAD5",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "0B9B92BA",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "234897AB",
+      "status": "unavailable",
+      "reason_code": "MISSING_ATTACHMENT"
+    },
+    {
+      "id": "9273BA17",
+      "status": "unavailable",
+      "reason_code": "MISSING_ATTACHMENT"
+    },
+    {
+      "id": "0222DB42",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "AC1BB830",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "BB83BDDE",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "2982AA23",
+      "status": "available",
+      "reason_code": "PLATE"
+    },
+    {
+      "id": "C7AE420A",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "DF3BDB9C",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "7E93E23F",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "F1D60854",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "C3BCABB3",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "0393F233",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "062AB91A",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "6B4C797E",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "5122E7D9",
+      "status": "unavailable",
+      "reason_code": "PROHIBITED_DIPS"
+    },
+    {
+      "id": "8BAB2735",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "C01F58D1",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "9372FFAA",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "11A123F3",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "91AF29E0",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "9930DF71",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "1006DF48",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "1DF4A847",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "9237BAD1",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "234BC743",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "95F2E076",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "9202CC23",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "878CD1D0",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "059E835D",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "502FCE31",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "0B841777",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "FFABC123",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "ABEC557F",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "19A38071",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "742E5BD5",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "37F9EDA7",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "026FD047",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "E3EDA509",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "8372BBCC",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "D0C4A899",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "B33B526E",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "1837BA23",
+      "status": "unavailable",
+      "reason_code": "MISSING_ATTACHMENT"
+    },
+    {
+      "id": "DE68C825",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "2EE45F81",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "8347DFD1",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "552AB030",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "629AE73D",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "CBC0D834",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "487B3755",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "D1CD146F",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "3FD83744",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "93472AC1",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "937292AB",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "238BA231",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "E51CCBE5",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "5DA40761",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "B05C2C29",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "F5DEF1EB",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "022DF610",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "9237BA12",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "24A809EF",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "5D99A2FA",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "84325755",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "875F585F",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "68F8A292",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "7D1BD41D",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "7757171F",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "FB09C938",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "911A58D3",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "2348AB72",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "90427D4A",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "C10A5AC9",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "213AB238",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "E764B907",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "20C1A3CB",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "9283BABA",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "F1258206",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "D04AC939",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "9694DA61",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "DCFF3E9F",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "CC35A01F",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "A8814C06",
+      "status": "review",
+      "reason_code": "AMBIGUOUS_SETUP"
+    },
+    {
+      "id": "DDCC3821",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "B82D6418",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "4377A52B",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "4377A52C",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "ACB2751D",
+      "status": "review",
+      "reason_code": "MISSING_ATTACHMENT"
+    },
+    {
+      "id": "06745E58",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "E53CCBE5",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "6DA40660",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "E05C2C38",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "AA52E8D2",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "6120CAAB",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "073032BB",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "28927A36",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "128A2381",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "EE2938D1",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "D2387AB1",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "2A48E443",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "527DA061",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "7593855D",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "D20D7BBE",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "3F5F8D40",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "6622E5A0",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "05293BCA",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "5E10D0E6",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "218DA87C",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "B60A678F",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "08A2974E",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "90E506D5",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "10313AFD",
+      "status": "available",
+      "reason_code": "KETTLEBELL"
+    },
+    {
+      "id": "B94E35E1",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "75BAC5C3",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "FBB62888",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "243710DE",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "28BB4A95",
+      "status": "unavailable",
+      "reason_code": "PROHIBITED_DIPS"
+    },
+    {
+      "id": "4B4BF8C2",
+      "status": "unavailable",
+      "reason_code": "PROHIBITED_DIPS"
+    },
+    {
+      "id": "10347BAC",
+      "status": "unavailable",
+      "reason_code": "PROHIBITED_DIPS"
+    },
+    {
+      "id": "2F8D3067",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "21310F5F",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "3765684D",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "3092FADD",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "6182EE83",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "EC3B69A3",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "6127A3AD",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "CDC472B1",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "93A552C6",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "94B7239B",
+      "status": "unavailable",
+      "reason_code": "MISSING_ATTACHMENT"
+    },
+    {
+      "id": "7AB9A362",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "286C1D0B",
+      "status": "available",
+      "reason_code": "PULLEY_CONFIRMED"
+    },
+    {
+      "id": "797F0782",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "72880C57",
+      "status": "unavailable",
+      "reason_code": "MISSING_MACHINE"
+    },
+    {
+      "id": "6BE68B62",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "72297E8C",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "33EDD7DB",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "32HKJ34K",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "A733CC5B",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "F30A4F01",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "A1F47ACC",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "C8706C80",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "79EF4E4F",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "B31EB524",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    },
+    {
+      "id": "7C50F118",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "0E4523F4",
+      "status": "unavailable",
+      "reason_code": "MISSING_EQUIPMENT"
+    },
+    {
+      "id": "8C9D2928",
+      "status": "available",
+      "reason_code": "BODYWEIGHT"
+    },
+    {
+      "id": "40C6A9FC",
+      "status": "available",
+      "reason_code": "BARBELL"
+    },
+    {
+      "id": "123EE239",
+      "status": "available",
+      "reason_code": "DUMBBELL"
+    }
+  ],
+  "audit": {
+    "initialResponseSha256": [
+      "67d131a91da8b5a90cbb92e89673b4af1b9f979f70b219eea62c1bd33032cff2",
+      "6d701ed2f52521dc7b3c5019f39850831e83fafe5544e3a1904f637cee72ae51",
+      "ccce833604df6f8622d7e589f989e514aec52390432c09a49568e84626812d51",
+      "34e7acb559da1e17acc8a0cc12e6c7220878a26b47105e64fc34df289019ed9c",
+      "5820cb35f092a332e82cdc23a1426f12eb971a2927acce64db2fd0e516a8a58f",
+      "079ddeb154769567b0db1edc30534efc400d2fcae98602e2b9dec633578d153f",
+      "4b5e356ae591f30543b96e3083019add2b6d240656a8ecab6c9c79a8d312fa49",
+      "42f17292005e410602be8a96585cfa66293cf11c5d4cfd93e882b38fa486ffaa",
+      "96886c63c95c6c2d64652dea5561667a42324c4e5e1590555e6172fde4a5cb2a",
+      "8642504715408cf8d47b82e4b4d87230d86b00e0c200bf8e929c80550134a942",
+      "90fa7ce7b725e6177a313008e57be5ad45e0d3844b661e05218a48871c1d9ec4",
+      "c153fe1bbdac1458c511e24ad3c24c5f04a647291526066f0fa86a27d8eb5001",
+      "f83b8918395a1ad95550a9cf3425621f64a1c80c68e14e5a7550cae1a03f9d43",
+      "ff0142535fb401b2963fe8e8446b9b93586504ada8c4338c9807f81830a98240",
+      "2e96246c503df9add7559b8208f01f814cde629a7e0c4589203a9a00c53d5048",
+      "7b2d61843d104459a2e8d04469a88646b5fabb3612a93850f6c0afdf949eff25",
+      "316679a722fc78f11f17d2c33d72fbeb145f3eaebf976ceb9da57a2757eb11ac",
+      "d3370bae684d022f5d41e085aa11e05a098b6fd95d12e798060ee7d3ce223ccc",
+      "af00f2426c5f67b7e45975eac88e476a44f38b102af6cd4df9793d2c4b32d943",
+      "5984eef762f91f6e90fe46665cf115da2f9e3f0accab412634cf1559666847f8",
+      "ef69f1e07447911d9d48f09c7984ea2c5bf38548a3cc6e4dae6decba1b28fa46",
+      "52cbbf7d122c93fd50611aa5e1ad2b56cb23f5fbafaf9309462905bb0d59cdb1",
+      "d884352ac3caed9660cad15b15ab568cbe1517f61121b87deae49d112a2221f4"
+    ],
+    "auditedResponseSha256": [
+      "3a3b5e2e83ae6373460cf94e91923e60cccbf9b635b29f7852339c6390872ef1",
+      "6066f0891c18273745a392894f29a0c1aadb7ceef0f636653c362b5dab1ec002",
+      "e704113661314048fb93bba6377e3256f7bc3f9f84e333d58958b8e7fe0966fa",
+      "60c88cf0bfebeac83ea017cc70583ef5a01bd99f167544c2191ba8757c676e2d",
+      "8cd21ff315de7e2473c19f67a268031f0321bbd9e62fd00058d3f1f082abf997",
+      "079ddeb154769567b0db1edc30534efc400d2fcae98602e2b9dec633578d153f",
+      "4b5e356ae591f30543b96e3083019add2b6d240656a8ecab6c9c79a8d312fa49",
+      "7eb33585cbb58e7d6731bcb4092b8145c362695482e3f14320d0047351ba9b32",
+      "5d8a4ef28f28c635b896a946db0070815156602194a65fa66b9ea5e788b42b09",
+      "ae0c950c97737ce1308ef141851a5ab75e246efd150e33d5dff0b9c52dcb5061",
+      "967baea5866874b28dca35152142797f801caaea96bd5d0dd186f4992f9c9aa1",
+      "f1efb050ed3951b874f3f55fdf15deaf213ad23226386df18eef8fa61eba16a9",
+      "a45c8b0c244d9b74fd93d82eddcf95dc40559724f687b93f36cadaa454eee836",
+      "cee6e839b3784cd598db7d7ed2d73d21f0eb98f3671c2568334e3a9f7b8d30d9",
+      "f88de31ba1a42215ca6fa6e571d3a8b6f019a1b2a96f6c81af8831dde6d33b3b",
+      "7b2d61843d104459a2e8d04469a88646b5fabb3612a93850f6c0afdf949eff25",
+      "00e39cd637dc4f65c87ebb2caccee6b87686968bdbcab2f103a73c9605fabea0",
+      "f3c8d463dac78640389c9dc2c5f8d722a01e4b9d64593a6fc179d6237c33d6d1",
+      "dd3c8f8b8b53ef98aa0471e925fe152d94302c5f81b4abb20b923d46759dc7e9",
+      "3b007e90b3491a1520eb2009476c7ca9959260d24a43c30ad6491180960ac04b",
+      "1948a43cc412f575ad9e9d9a3f5e559570ab78d3d447155b0a516b94b25c8f7e",
+      "1941e2adafdc84c6825ffbeacaf67f6d669006c02f19a0f51e2453628cfb13de",
+      "99487a59b6d491d390cbbd1bae11fd3e6e8cf8cdd6c518465b6ef78c39f36db6"
+    ],
+    "changedByAudit": [
+      "99D5F10E",
+      "F51D9080",
+      "9c38cd1a-03ad-462c-9332-573da0de45a8",
+      "2DBCA395",
+      "99C1F2AD",
+      "EA820646",
+      "0B4C1902",
+      "c6572171-5bd3-4722-9cd0-917fa9f64de7",
+      "23A48484",
+      "651F844C",
+      "8C331CD8",
+      "C469EA70",
+      "22578A94",
+      "040BA2E3",
+      "98237BA2",
+      "923874CA",
+      "D7D7FCCE",
+      "983274DD",
+      "4E5257DE",
+      "0482DA98",
+      "8A2E6481",
+      "4F942934",
+      "FAB6EB2F",
+      "6B4C797E",
+      "ACB2751D",
+      "6182EE83",
+      "F30A4F01",
+      "A1F47ACC",
+      "0E4523F4"
+    ]
+  }
+}
