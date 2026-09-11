@@ -252,6 +252,7 @@ Behavioral guardrails that apply regardless of which persona you're using. These
 - **Check-in before programming** — never dump a workout without asking how the user feels
 - **Overwrite protection** — check for unfinished routines before replacing them
 - **Notes management** — save notes autonomously, clear when resolved
+- **Completed-session reviews** — brief, evidence-based feedback in relevant conversations; no proactive notifications or durable reviewed-workout tracking
 - **TM update protocol** — never update training maxes without explicit confirmation
 - **API failure handling** — graceful degradation when Hevy is down
 - **Hard constraints** — never prescribe unavailable equipment, never ignore pain
@@ -277,6 +278,18 @@ The structure of your program. The default is a 5/3/1 Upper/Lower split, but you
 - **How to determine program state** — the bot reads your Hevy history to figure out where you are in the program; describe how that mapping works
 
 If you change the program structure significantly (e.g., from 5/3/1 to a PPL split), you'll also want to update the exercise pins (see below).
+
+Accessory loads use comparable completed work for the same exercise and equipment
+variant. The coach builds reps within a chosen 10–20 range at RPE 7–8 before
+increasing weight after two qualifying exposures. Choices stay reasonably stable
+within each session type during a cycle. Main lifts and FSL keep their TM-based
+percentages, and front squats keep 3×8. Available equipment determines load steps (including single 2.5 lb plates on
+the listed pulley, versus paired plates on a barbell).
+
+For unfamiliar exercises, the coach checks history and labels new loads as
+provisional estimates, then calibrates from completed performance and reported
+effort. Missing effort is not assumed, and unavailable history is distinguished
+from an empty history result.
 
 ### 5. Starting values (`config/defaults.json`)
 
@@ -415,3 +428,27 @@ These checks use local fixtures and do not require paid model calls. Logs identi
 Technical decisions and verification results live in [docs/](docs/). The [performance review](docs/review-sprint-closure-2026-09-07.md) records the synchronization, context, and delivery changes.
 
 The [exercise identity study](docs/review-exercise-identity-2026-09-08.md) includes an isolated, offline resolver comparison and a proposed production design. Reproduce it with `npx tsx scripts/exercise-study/run.ts`; it uses captured catalog data and makes no live requests or database writes. See the [artifact instructions](scripts/exercise-study/README.md) for source data, limitations, and optional read-only catalog acquisition.
+
+### Coaching behavior evaluation
+
+```bash
+# Offline validation of scenario setup; no model calls or credentials needed
+npm run evaluate:coaching -- --dry-run --output /tmp/coaching-dry-run.json
+
+# Paid Claude calls: two runs per scenario, with synthetic Hevy data only
+npm run evaluate:coaching -- --output /tmp/coaching-results.json
+```
+
+The runner uses the configured model and effort with a fresh temporary SQLite
+database per run. It never copies production coaching state and injects a fake
+Hevy client that captures writes. Scenarios exercise progression, effort gaps,
+equipment limits, program preservation, conversational reviews, and calibration.
+The variant-calibration scenario includes a second conversation turn.
+Use `--scenario <id>` to rerun one scenario (still twice); omit it for the full set.
+
+Results include prompt hashes, responses, tool traces, model usage, and a manual
+review rubric. Automated checks validate tool behavior and durable state changes;
+review the prose against the rubric before declaring coaching quality passed.
+Dry runs are not behavioral validation. This runner is separate from the historical
+effort-comparison campaign. Configuration Markdown changes hot-reload on the next
+message; restore the prior Markdown to roll back coaching behavior.

@@ -8,6 +8,28 @@ Before programming a workout, always check in with the user first.
 Do not present the full workout before they've told you how they're 
 feeling. Leave room for them to shape the session.
 
+## Review Completed Sessions
+When the user discusses a completed workout, or at the next training
+check-in when relevant, identify one meaningful result and its implication
+for the next comparable session: repeat, progress, or adjust. Use actual
+completed sets, reps, loads, notes, and reported effort. The queued routine
+is a plan, not evidence of what was performed. Do not infer clean technique
+or easy effort from completed reps alone. Refer to the next comparable
+session by its correct session type; do not skip ahead in the rotation.
+Do not assume why work was
+omitted; ask only when the reason changes the recommendation.
+
+Keep the review to one or two sentences plus an optional concise question.
+A debrief should state the next action, not prescribe future workout weights
+unless asked. Say "follow the next planned wave" rather than volunteering
+new percentage calculations. Describe recorded reps without adding claims
+about technique or effort that the user did not report.
+Do not insert reviews into unrelated requests or repeat a review already
+visible in chat history unless asked or given new information. Judge results
+against the current muscle-preservation goal; unchanged performance is not
+automatically a plateau to fix. Recommendations do not authorize routine
+writes or training-max changes: preserve the existing approval requirements.
+
 ## Before Overwriting the Routine
 
 When starting a new morning session, compare the current routine
@@ -59,3 +81,9 @@ pushing to Hevy later. If they ask you to retry, try again.
 - Never ignore reported pain or discomfort
 - Never skip the check-in and go straight to programming
 - Never update training maxes without explicit user confirmation
+- Never treat prescribed target effort as reported effort
+- Never describe a single ceiling-rep accessory session as permission to
+  increase load. This applies to future advice and post-calibration follow-ups
+  too: both comparable exposures must meet ALL of program.md's progression
+  conditions. Two exposures at the ceiling with reported RPE 8 qualify;
+  a third qualifying exposure is not required.

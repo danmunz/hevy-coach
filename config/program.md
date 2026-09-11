@@ -76,9 +76,67 @@ Guidelines, not rigid rules:
 - Dumbbell and cable accessories should be moderate weight, 
   higher reps (10-20 range). The main and supplemental lifts 
   handle the heavy work.
-- Don't repeat the same accessory combination two sessions 
-  in a row. Rotate exercises across weeks to provide variety 
-  and hit muscles from different angles.
+- Vary accessories between session types (Upper A/B and Lower A/B),
+  but keep them reasonably stable across repeated occurrences of the
+  same session type within a cycle so progression can be evaluated.
+  Adjust for equipment, preferences, discomfort, or recovery as needed.
+
+## Accessory Progression and Load Calibration
+
+Use completed work for the exact exercise and equipment variant as the
+loading baseline. Compare work sets with similar set counts and rep targets;
+exclude warmups. Use checked history when sufficient; otherwise fetch that
+exercise's history before choosing a load or claiming a progression trend.
+A new equipment/grip variant also requires its own history lookup unless
+its completed performance is already supplied. A different variant's load
+is not sufficient history, even when the user says they want to try it.
+
+For accessories, choose a specific rep range within 10-20 and target RPE 7-8.
+Add reps before weight. Before recommending a load increase, check EACH of
+the two exposures separately: did ALL work sets reach the range ceiling,
+AND was effort actually logged or reported within target on that exposure?
+Both exposures must pass both checks. Merely having two sessions in history
+is not qualification. If only the latest qualifies, repeat its load and
+ceiling reps; do not increase weight yet.
+
+The prescribed TARGET RPE is never evidence of the PERFORMED RPE. A history
+entry without effort has unknown effort even if the user states their target.
+Ask one concise question before recommending an increase when effort is
+missing. A clear user report about those exposures can supply the evidence.
+For example, at a 10-15 target: 15/13/12 then 15/15/15 is only ONE qualifying
+exposure; two sessions of 15/15/15 without reported effort do NOT qualify.
+These checks apply to follow-up advice after calibration as well. When
+explaining a load decision, identify how many qualifying exposures exist.
+Any description of the future load-increase threshold must retain the
+TWO-exposure requirement, not shorten it to "once all sets hit the ceiling."
+
+Example for 3x10-15 at RPE 7-8:
+- 3x12@8 then 3x15@8: ONE qualifies; repeat the current load for 3x15.
+- 3x15 with no effort twice: effort unknown; ask before increasing.
+- 3x15@8 twice: TWO qualify; use the smallest available increase.
+- First calibrated exposure 3x12@8: retain its load and build reps. Future
+  increases still require TWO exposures of 3x15 with reported effort in range.
+
+After qualifying, use the smallest load increase actually available for
+that equipment and return toward the bottom of the rep range. For the listed
+rack pulley and loose plates, the smallest added plate is 2.5 lbs: 70 becomes
+72.5, not 75 or 80. Barbell increases need matched plates on both sides;
+do not apply that paired-plate rule to the pulley. If no higher
+load is available, retain the load; do not invent equipment or automatically
+add sets. Maintaining performance can support the muscle-preservation goal.
+
+If relevant history is empty, propose a conservative load explicitly labeled
+as a provisional starting estimate. A failed lookup means history is
+unavailable, not nonexistent: explain that limitation and ask for a known
+load, or label any proposed starting estimate as provisional. Never present
+an estimate as an established working weight. Do not automatically transfer
+loads between exercises or equipment variants. Revisit an estimate using
+the first completed exposure and reported effort.
+
+Main lifts and FSL retain their TM-based percentages; logged working weights
+are NOT training maxes. Front Squat retains 3x8 and uses the history and
+calibration guidance above, not the accessory rep range. Training-max
+changes still require explicit approval under rules.md.
 
 ## Progression
 After each 3-week cycle: +5 lbs to upper TMs (Bench, OHP), 
@@ -95,8 +153,11 @@ Hevy history is the source of truth. Look at:
 If it's ambiguous (skipped sessions, changed order), ask.
 
 ## Weight Formatting
-All weights are authored in lbs and must round to the nearest 
-5 lbs (standard plate math). When sending to the Hevy API, 
+All weights are authored in lbs. Round barbell loads to available plate
+increments (normally 5 lbs total). Dumbbells and kettlebells must use the
+actual listed weights, not blanket 5-lb rounding. Cable loads must also be
+loadable with the available equipment; do not invent a selectorized stack
+or pin settings when only a rack pulley and plates are listed. When sending to the Hevy API,
 convert using 0.001 kg precision:
 
     weight_kg = round(weight_lb × 0.45359237, 3)
